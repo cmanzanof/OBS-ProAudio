@@ -2274,6 +2274,7 @@ static obs_source_t *obs_load_source_type(obs_data_t *source_data, bool is_priva
 	int di_order;
 	int di_mode;
 	int monitoring_type;
+	obs_data_array_t *bus_sends;
 
 	prev_ver = (uint32_t)obs_data_get_int(source_data, "prev_ver");
 
@@ -2355,6 +2356,25 @@ static obs_source_t *obs_load_source_type(obs_data_t *source_data, bool is_priva
 		}
 	}
 	obs_source_set_monitoring_type(source, (enum obs_monitoring_type)monitoring_type);
+
+	/* ProAudio: per-bus send levels.  Absent in upstream scene collections,
+	 * in which case every bus simply stays at unity gain. */
+	bus_sends = obs_data_get_array(source_data, "bus_sends");
+	if (bus_sends) {
+		size_t count = obs_data_array_count(bus_sends);
+
+		if (count > MAX_AUDIO_MIXES)
+			count = MAX_AUDIO_MIXES;
+
+		for (size_t i = 0; i < count; i++) {
+			obs_data_t *item = obs_data_array_item(bus_sends, i);
+
+			obs_source_set_bus_send(source, i, (float)obs_data_get_double(item, "volume"));
+			obs_data_release(item);
+		}
+
+		obs_data_array_release(bus_sends);
+	}
 
 	obs_data_release(source->private_settings);
 	source->private_settings = obs_data_get_obj(source_data, "private_settings");
@@ -2493,6 +2513,35 @@ obs_data_t *obs_save_source(obs_source_t *source)
 	obs_data_set_int(source_data, "deinterlace_mode", di_mode);
 	obs_data_set_int(source_data, "deinterlace_field_order", di_order);
 	obs_data_set_int(source_data, "monitoring_type", m_type);
+
+	/* ProAudio: per-bus send levels.  Stored only when a bus was actually
+	 * changed, so scene collections written by this fork stay identical to
+	 * upstream ones unless the mixer was used, and stock OBS simply
+	 * ignores the key. */
+	{
+		bool has_bus_sends = false;
+
+		for (size_t i = 0; i < MAX_AUDIO_MIXES; i++) {
+			if (obs_source_get_bus_send(source, i) != 1.0f) {
+				has_bus_sends = true;
+				break;
+			}
+		}
+
+		if (has_bus_sends) {
+			obs_data_array_t *bus_sends = obs_data_array_create();
+
+			for (size_t i = 0; i < MAX_AUDIO_MIXES; i++) {
+				obs_data_t *item = obs_data_create();
+				obs_data_set_double(item, "volume", obs_source_get_bus_send(source, i));
+				obs_data_array_push_back(bus_sends, item);
+				obs_data_release(item);
+			}
+
+			obs_data_set_array(source_data, "bus_sends", bus_sends);
+			obs_data_array_release(bus_sends);
+		}
+	}
 
 	if (canvas) {
 		obs_data_set_string(source_data, "canvas_uuid", obs_canvas_get_uuid(canvas));

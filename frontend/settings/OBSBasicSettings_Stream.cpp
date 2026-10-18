@@ -1013,7 +1013,13 @@ void OBSBasicSettings::UpdateVodTrackSetting()
 
 	vodTrackContainer = new QWidget(this);
 	QHBoxLayout *vodTrackLayout = new QHBoxLayout();
-	for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
+
+	/* The frontend currently exposes 6 tracks. The audio bus UI will raise
+	 * this to MAX_AUDIO_MIXES (8) in a follow-up; until then, keep the
+	 * selectable range aligned with the track widgets that exist. */
+	constexpr int uiAudioTracks = 6;
+
+	for (int i = 0; i < uiAudioTracks; i++) {
 		vodTrack[i] = new QRadioButton(QString::number(i + 1));
 		vodTrackLayout->addWidget(vodTrack[i]);
 
@@ -1036,7 +1042,7 @@ void OBSBasicSettings::UpdateVodTrackSetting()
 	connect(vodTrackCheckbox, &QCheckBox::clicked, vodTrackContainer, &QWidget::setEnabled);
 
 	int trackIndex = config_get_int(main->Config(), "AdvOut", "VodTrackIndex");
-	for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
+	for (int i = 0; i < uiAudioTracks; i++) {
 		vodTrack[i]->setChecked((i + 1) == trackIndex);
 	}
 }

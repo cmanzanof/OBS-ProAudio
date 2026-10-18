@@ -25,7 +25,12 @@
 extern "C" {
 #endif
 
-#define MAX_AUDIO_MIXES 6
+/*
+ * Number of audio mixes. Each mix can be routed to an output independently,
+ * which lets libobs provide broadcast-style audio buses:
+ *   mix 0 -> Master, mixes 1..7 -> Bus A..G
+ */
+#define MAX_AUDIO_MIXES 8
 #define MAX_AUDIO_CHANNELS 8
 #define MAX_DEVICE_INPUT_CHANNELS 64
 #define AUDIO_OUTPUT_FRAMES 1024

@@ -74,6 +74,11 @@ Los *mixes* de libobs se usan como **buses de broadcast**:
 * Mix ``0``: Master.
 * Mixes ``1..7``: Bus A..G.
 
+En el mezclador los buses se muestran como en vMix: ``M`` para el mix Master y ``A``..``G`` para
+los buses auxiliares. Cada bus corresponde a una pista de OBS (el mix ``0`` es la pista 1), así
+que las casillas de las Propiedades de Audio avanzadas son las de las pistas 1..6 de upstream más
+las dos que agrega el fork.
+
 Hoja de ruta
 ------------
 
@@ -87,8 +92,13 @@ Hoja de ruta
    4. Medidores peak/RMS por bus.
    5. Delay por entrada en milisegundos.
 
-2. **F2 - UI del mezclador**: botones ``M A B C D E F G`` por fuente, envíos por bus en las
-   propiedades avanzadas, medidores pre/post y vista de buses.
+2. **F2 - UI del mezclador** (en curso)
+
+   1. Buses ``M A B C D E F G`` por fuente y columna de solo en las Propiedades de Audio
+      avanzadas, con persistencia de los envíos por bus.
+   2. Botón Solo en cada tira del mezclador, con elección AFL/PFL, indicador de cuántas fuentes
+      están en solo y "quitar todos los solos".
+   3. Envíos por bus con sliders, faders por bus, volumen de auriculares y medidores por bus.
 3. **F3 - Salidas y automatismos**: hasta 8 salidas a dispositivos, bus de headphones,
    Audio Follow Video (AFV) y mix-minus.
 4. **F4 - Plugins**: host VST3 y matriz de canales.
@@ -112,6 +122,19 @@ Registro de cambios propios
   así que no puede alterar lo que se transmite o graba (igual que vMix). AFL usa el volumen
   post-fader (y, como en vMix, se oye aunque la fuente esté muteada); PFL escucha antes del fader.
   Sin cambios de comportamiento hasta que se active un solo.
+* **F2.0**: ``libobs``: los envíos por bus (``bus_send``) ahora se guardan y cargan con la fuente,
+  en una clave ``bus_sends`` del archivo de escena. Solo se escribe cuando algún bus se movió del
+  valor unitario, así que las colecciones de escenas siguen siendo idénticas a las de upstream si
+  no se usó el mezclador, y OBS original simplemente ignora la clave.
+* **F2.1**: ``frontend``: Propiedades de Audio avanzadas. Las casillas de pistas ya no están
+  hardcodeadas a las 6 de upstream: se generan a partir de ``MAX_AUDIO_MIXES`` y se rotulan como
+  en vMix (``M`` para Master, ``A``..``G`` para los buses), con el nombre de la mezcla en el
+  tooltip y el encabezado "Buses". Se agrega una columna **Solo** (desactivado / AFL / PFL) por
+  fuente, que se mantiene sincronizada con la señal ``solo_mode``.
+* **F2.2**: ``frontend``: cada tira del mezclador tiene un botón **S** de solo (clic derecho para
+  elegir AFL o PFL, AFL por defecto). La barra del mezclador muestra un indicador con la cantidad
+  de fuentes en solo y permite quitarlas todas de una vez, para que un solo olvidado no pase
+  desapercibido.
 * **CI**: primer arranque del workflow del fork. Se publican los tags de upstream en ``origin``
   (sin ellos ``versionconfig.cmake`` rompe el configure), el job de macOS pasa a ``macos-26`` con
   Xcode 26.5, el de Windows a ``windows-2025-vs2026`` y Ubuntu compila contra 24.04 y 26.04. Los

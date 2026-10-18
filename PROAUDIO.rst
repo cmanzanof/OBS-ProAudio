@@ -36,6 +36,9 @@ Puesta en marcha del remoto
    git push -u origin main
    git push -u origin feat/buses-core
 
+   # Los tags son obligatorios, no decorativos (ver CI).
+   git push origin 32.2.2
+
 CI
 --
 
@@ -43,6 +46,21 @@ CI
 artefactos. Los workflows de upstream no se disparan en el fork porque están limitados a las
 ramas ``master``/``release/**``. El plugin de navegador (CEF) queda deshabilitado: es ortogonal
 al audio y evita una descarga de ~1 GB.
+
+Tres cosas que el workflow tiene que respetar (nos costaron la primera corrida):
+
+* **Los tags deben estar publicados en ``origin``.** ``cmake/common/versionconfig.cmake`` deduce
+  la versión con ``git describe --tags``; sin tags devuelve un hash suelto y
+  ``project(... VERSION <hash>)`` aborta a los pocos segundos de configurar, en las tres
+  plataformas. Por eso el checkout usa ``fetch-tags: true``.
+* **macOS** exige el SDK 26.5 (``cmake/macos/compilerconfig.cmake``), o sea Xcode 26.5: el job
+  corre en ``macos-26`` y selecciona ese Xcode a mano.
+* **Windows** usa el preset ``windows-x64``, que pide el generador *Visual Studio 18 2026* y el
+  SDK 10.0.26100: el job corre en ``windows-2025-vs2026`` (``windows-2022`` solo trae VS 2022).
+
+Además, cada job que falla vuelca el final de su log como anotaciones ``::error::``: el API de
+logs de jobs requiere permisos de administración, pero las anotaciones se leen sin
+autenticación.
 
 Modelo de audio
 ---------------
@@ -81,6 +99,10 @@ Registro de cambios propios
   (``obs_source_set_bus_send()`` / ``obs_source_get_bus_send()``), aplicada post-fader en la
   ruta de render, con señal ``bus_send`` para la UI. Por defecto vale 1.0, así que la mezcla
   existente suena exactamente igual que antes.
+* **CI**: primer arranque del workflow del fork. Se publican los tags de upstream en ``origin``
+  (sin ellos ``versionconfig.cmake`` rompe el configure), el job de macOS pasa a ``macos-26`` con
+  Xcode 26.5, el de Windows a ``windows-2025-vs2026`` y Ubuntu compila contra 24.04 y 26.04. Los
+  jobs que fallan vuelcan el final de su log como anotaciones.
 
 Licencia
 --------

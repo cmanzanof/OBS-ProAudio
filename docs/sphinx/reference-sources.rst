@@ -659,6 +659,15 @@ The following signals are defined for every source type:
 
    Called when the audio mixers have changed.
 
+**bus_send** (ptr source, long long bus, in out float volume)
+
+   Called when the send gain of a source for one of its audio mixers (buses)
+   has changed.
+
+**solo_mode** (ptr source, in out int mode)
+
+   Called when the solo (headphone preview) mode of the source has changed.
+
 **audio_activate** (ptr source)
 
    Called when the source's audio becomes active.
@@ -1231,6 +1240,27 @@ General Source Functions
    :param order: | OBS_MONITORING_TYPE_NONE - Do not monitor
                  | OBS_MONITORING_TYPE_MONITOR_ONLY - Send to monitor device, no outputs
                  | OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT - Send to monitor device and outputs
+
+---------------------
+
+.. function:: void obs_source_set_solo_mode(obs_source_t *source, enum obs_source_solo_mode mode)
+              enum obs_source_solo_mode obs_source_get_solo_mode(const obs_source_t *source)
+              bool obs_source_solo_active(void)
+
+   Sets/gets the solo (headphone preview) mode of a source, or whether any
+   source is currently soloed.
+
+   While at least one source is soloed, only the soloed sources are heard on
+   the audio monitoring device, even when their monitoring type is
+   OBS_MONITORING_TYPE_NONE.  Solo never affects the audio mixes: master and
+   the auxiliary buses keep receiving exactly the same audio, so the feature is
+   non-destructive.
+
+   :param mode: | OBS_SOLO_MODE_OFF - Not soloed
+                | OBS_SOLO_MODE_AFL - After-fader listen: post-fader volume,
+                  audible even when the source is muted
+                | OBS_SOLO_MODE_PFL - Pre-fader listen: the volume fader is not
+                  applied
 
 ---------------------
 

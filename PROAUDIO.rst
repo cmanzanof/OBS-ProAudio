@@ -82,7 +82,8 @@ Hoja de ruta
    1. ``MAX_AUDIO_MIXES`` 6 -> 8.
    2. Ganancia y mute por fuente y por bus (sends post-fader). Las rampas por bus quedan para
       F3, donde las necesita Audio Follow Video.
-   3. Solo AFL/PFL no destructivo y bus de monitoreo.
+   3. Solo AFL/PFL no destructivo en la salida de monitoreo (auriculares). El bus de monitoreo
+      con fader propio llega con las salidas de bus de F3.
    4. Medidores peak/RMS por bus.
    5. Delay por entrada en milisegundos.
 
@@ -103,6 +104,14 @@ Registro de cambios propios
   (``obs_source_set_bus_send()`` / ``obs_source_get_bus_send()``), aplicada post-fader en la
   ruta de render, con señal ``bus_send`` para la UI. Por defecto vale 1.0, así que la mezcla
   existente suena exactamente igual que antes.
+* **F1.3**: ``libobs``: **Solo** (previsualización por auriculares) con modos AFL y PFL
+  (``obs_source_set_solo_mode()`` / ``obs_source_get_solo_mode()`` / ``obs_source_solo_active()``,
+  señal ``solo_mode``). Mientras haya al menos una fuente en solo, en el dispositivo de monitoreo
+  solo se oyen las fuentes solistas, aunque su tipo de monitoreo sea "sin monitoreo". El solo
+  **nunca** toca las mezclas: Master y los buses A..G siguen recibiendo exactamente el mismo audio,
+  así que no puede alterar lo que se transmite o graba (igual que vMix). AFL usa el volumen
+  post-fader (y, como en vMix, se oye aunque la fuente esté muteada); PFL escucha antes del fader.
+  Sin cambios de comportamiento hasta que se active un solo.
 * **CI**: primer arranque del workflow del fork. Se publican los tags de upstream en ``origin``
   (sin ellos ``versionconfig.cmake`` rompe el configure), el job de macOS pasa a ``macos-26`` con
   Xcode 26.5, el de Windows a ``windows-2025-vs2026`` y Ubuntu compila contra 24.04 y 26.04. Los

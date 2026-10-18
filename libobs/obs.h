@@ -1382,6 +1382,35 @@ enum obs_monitoring_type {
 EXPORT void obs_source_set_monitoring_type(obs_source_t *source, enum obs_monitoring_type type);
 EXPORT enum obs_monitoring_type obs_source_get_monitoring_type(const obs_source_t *source);
 
+/** Solo (headphone preview) modes a source can be in. */
+enum obs_source_solo_mode {
+	/** The source is not soloed. */
+	OBS_SOLO_MODE_OFF,
+	/** After-fader listen: post-fader, post-effects volume.  The source is
+	 * audible in the headphones even while it is muted. */
+	OBS_SOLO_MODE_AFL,
+	/** Pre-fader listen: like AFL, but the volume fader is not applied. */
+	OBS_SOLO_MODE_PFL,
+};
+
+/**
+ * Sets the solo mode of a source.  While at least one source is soloed, only
+ * soloed sources are heard on the audio monitoring (headphones) device, even
+ * if their monitoring type is "monitor off".  Solo never affects the audio
+ * mixes themselves: the master and the auxiliary buses keep receiving the
+ * exact same audio, which makes the feature non-destructive.
+ *
+ * @param source  Source to change the solo mode of
+ * @param mode    Solo mode
+ */
+EXPORT void obs_source_set_solo_mode(obs_source_t *source, enum obs_source_solo_mode mode);
+
+/** Gets the solo mode of a source. */
+EXPORT enum obs_source_solo_mode obs_source_get_solo_mode(const obs_source_t *source);
+
+/** Returns true when at least one source is currently soloed. */
+EXPORT bool obs_source_solo_active(void);
+
 /** Gets private front-end settings data.  This data is saved/loaded
  * automatically.  Returns an incremented reference. */
 EXPORT obs_data_t *obs_source_get_private_settings(obs_source_t *item);

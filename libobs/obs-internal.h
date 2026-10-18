@@ -461,6 +461,9 @@ struct obs_core_audio {
 	struct deque tasks;
 
 	struct obs_source *monitoring_duplicating_source;
+
+	/* ProAudio: number of sources currently in a solo mode */
+	volatile long solo_count;
 };
 
 /* user sources, output channels, and displays */
@@ -885,6 +888,9 @@ struct obs_source {
 	 * effective send gain for those mixes is 0 regardless of this value.
 	 * 1.0 behaves exactly like the pre-bus code path. */
 	float bus_send[MAX_AUDIO_MIXES];
+	/* ProAudio: solo (headphone preview) mode of the source.  Solo only
+	 * ever changes what the monitoring device plays, never the mixes. */
+	enum obs_source_solo_mode solo_mode;
 	float user_volume;
 	float volume;
 	int64_t sync_offset;
@@ -1023,6 +1029,10 @@ extern void obs_transition_load(obs_source_t *source, obs_data_t *data);
 struct audio_monitor *audio_monitor_create(obs_source_t *source);
 void audio_monitor_reset(struct audio_monitor *monitor);
 extern void audio_monitor_destroy(struct audio_monitor *monitor);
+
+/* ProAudio: gain a monitoring device has to apply to the audio of a source,
+ * taking solo (AFL/PFL) into account. */
+extern float obs_source_monitor_volume(const obs_source_t *source);
 
 extern obs_source_t *obs_source_create_canvas(obs_canvas_t *canvas, const char *id, const char *name,
 					      obs_data_t *settings, obs_data_t *hotkey_data);

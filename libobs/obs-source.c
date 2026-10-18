@@ -260,6 +260,7 @@ static bool obs_source_init(struct obs_source *source)
 	source->audio_mixers = 0xFF;
 	for (size_t mix = 0; mix < MAX_AUDIO_MIXES; mix++)
 		source->bus_send[mix] = 1.0f;
+	source->solo_mode = OBS_SOLO_MODE_OFF;
 
 	source->private_settings = obs_data_create();
 	return true;
@@ -781,6 +782,11 @@ static void obs_source_destroy_defer(struct obs_source *source)
 	}
 
 	blog(LOG_DEBUG, "%ssource '%s' destroyed", source->context.private ? "private " : "", source->context.name);
+
+	if (source->solo_mode != OBS_SOLO_MODE_OFF) {
+		source->solo_mode = OBS_SOLO_MODE_OFF;
+		os_atomic_dec_long(&obs->audio.solo_count);
+	}
 
 	audio_monitor_destroy(source->monitor);
 
@@ -4892,6 +4898,87 @@ float obs_source_get_bus_send(const obs_source_t *source, size_t bus)
 	return source->bus_send[bus];
 }
 
+/* ProAudio: creates or destroys the monitoring device stream of a source.
+ * A source is monitored when it asks for it through its monitoring type, or
+ * while it is soloed: solo is a headphone preview that has to work for any
+ * source, no matter what its monitoring type is. */
+static void obs_source_update_monitor(obs_source_t *source)
+{
+	bool should_monitor = source->monitoring_type != OBS_MONITORING_TYPE_NONE ||
+			      source->solo_mode != OBS_SOLO_MODE_OFF;
+
+	if (should_monitor && !source->monitor)
+		source->monitor = audio_monitor_create(source);
+	else if (!should_monitor && source->monitor) {
+		audio_monitor_destroy(source->monitor);
+		source->monitor = NULL;
+	}
+}
+
+void obs_source_set_solo_mode(obs_source_t *source, enum obs_source_solo_mode mode)
+{
+	struct calldata data;
+	uint8_t stack[128];
+	enum obs_source_solo_mode new_mode;
+	bool was_soloed;
+
+	if (!obs_source_valid(source, "obs_source_set_solo_mode"))
+		return;
+	if (mode != OBS_SOLO_MODE_OFF && mode != OBS_SOLO_MODE_AFL && mode != OBS_SOLO_MODE_PFL)
+		return;
+	if (source->solo_mode == mode)
+		return;
+
+	calldata_init_fixed(&data, stack, sizeof(stack));
+	calldata_set_ptr(&data, "source", source);
+	calldata_set_int(&data, "mode", mode);
+
+	signal_handler_signal(source->context.signals, "solo_mode", &data);
+	signal_handler_signal(obs->signals, "source_solo_mode", &data);
+
+	new_mode = (enum obs_source_solo_mode)calldata_int(&data, "mode");
+	if (new_mode != OBS_SOLO_MODE_OFF && new_mode != OBS_SOLO_MODE_AFL && new_mode != OBS_SOLO_MODE_PFL)
+		new_mode = mode;
+
+	was_soloed = source->solo_mode != OBS_SOLO_MODE_OFF;
+	source->solo_mode = new_mode;
+
+	if (was_soloed != (new_mode != OBS_SOLO_MODE_OFF)) {
+		if (new_mode != OBS_SOLO_MODE_OFF)
+			os_atomic_inc_long(&obs->audio.solo_count);
+		else
+			os_atomic_dec_long(&obs->audio.solo_count);
+	}
+
+	obs_source_update_monitor(source);
+}
+
+enum obs_source_solo_mode obs_source_get_solo_mode(const obs_source_t *source)
+{
+	return obs_source_valid(source, "obs_source_get_solo_mode") ? source->solo_mode : OBS_SOLO_MODE_OFF;
+}
+
+bool obs_source_solo_active(void)
+{
+	return obs && os_atomic_load_long(&obs->audio.solo_count) > 0;
+}
+
+float obs_source_monitor_volume(const obs_source_t *source)
+{
+	/* PFL listens to the source before its own fader is applied. */
+	if (source->solo_mode == OBS_SOLO_MODE_PFL)
+		return 1.0f;
+
+	/* While another source is soloed, only the soloed sources are heard on
+	 * the monitoring device.  The audio mixes are not affected at all. */
+	if (source->solo_mode == OBS_SOLO_MODE_OFF && obs_source_solo_active())
+		return 0.0f;
+
+	/* AFL, like regular monitoring, is post-fader.  Like vMix AFL it is
+	 * audible even if the source is muted. */
+	return source->user_volume;
+}
+
 void obs_source_draw_set_color_matrix(const struct matrix4 *color_matrix, const struct vec3 *color_range_min,
 				      const struct vec3 *color_range_max)
 {
@@ -5611,8 +5698,6 @@ void obs_source_set_monitoring_type(obs_source_t *source, enum obs_monitoring_ty
 {
 	struct calldata data;
 	uint8_t stack[128];
-	bool was_on;
-	bool now_on;
 
 	if (!obs_source_valid(source, "obs_source_set_monitoring_type"))
 		return;
@@ -5625,19 +5710,9 @@ void obs_source_set_monitoring_type(obs_source_t *source, enum obs_monitoring_ty
 
 	signal_handler_signal(source->context.signals, "audio_monitoring", &data);
 
-	was_on = source->monitoring_type != OBS_MONITORING_TYPE_NONE;
-	now_on = type != OBS_MONITORING_TYPE_NONE;
-
-	if (was_on != now_on) {
-		if (!was_on) {
-			source->monitor = audio_monitor_create(source);
-		} else {
-			audio_monitor_destroy(source->monitor);
-			source->monitor = NULL;
-		}
-	}
-
 	source->monitoring_type = type;
+
+	obs_source_update_monitor(source);
 }
 
 enum obs_monitoring_type obs_source_get_monitoring_type(const obs_source_t *source)

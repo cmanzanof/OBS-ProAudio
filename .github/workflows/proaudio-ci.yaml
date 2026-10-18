@@ -1,0 +1,163 @@
+name: ProAudio CI
+
+# Fork CI: build only. Upstream's own workflows are left untouched and do not
+# run here because they are limited to the `master`/`release/**` branches.
+#
+# The browser plugin (CEF) is disabled so the build does not need the ~1 GB
+# dependency download. ProAudio Studio only changes audio, so CEF is
+# orthogonal; set ENABLE_BROWSER=ON locally when it matters.
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: proaudio-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ubuntu:
+    name: Ubuntu x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+
+          # Base list taken from .github/scripts/utils.zsh/setup_ubuntu, plus the
+          # tools the workflow itself needs (the CI runners ship them, we do not).
+          PACKAGES="
+            build-essential cmake ninja-build pkg-config ccache git curl jq
+            libglib2.0-dev extra-cmake-modules lsb-release
+            libcurl4-openssl-dev libjansson-dev uthash-dev libsimde-dev libmbedtls-dev
+            libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev
+            libswresample-dev libswscale-dev libffmpeg-nvenc-dev
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev
+            libxcb-xinerama0-dev libxcb-composite0-dev libxcb-xfixes0-dev libxinerama-dev
+            libxcomposite-dev libxdamage-dev libxss-dev libgl1-mesa-dev libgles2-mesa-dev
+            libglvnd-dev libdrm-dev libpci-dev libxkbcommon-dev libxkbcommon-x11-dev
+            libatk1.0-dev libatk-bridge2.0-dev libfontconfig-dev libfreetype6-dev
+            libwayland-dev libasound2-dev libpulse-dev libjack-jackd2-dev libsndio-dev
+            libpipewire-0.3-dev libspeexdsp-dev libudev-dev libv4l-dev libva-dev libvpl-dev
+            libvlc-dev libx264-dev libfdk-aac-dev librist-dev libsrt-openssl-dev
+            libqrcodegencpp-dev nlohmann-json3-dev libwebsocketpp-dev libasio-dev
+            qt6-base-dev qt6-base-private-dev libqt6svg6-dev
+            swig python3-dev libluajit-5.1-dev libcmocka-dev
+            uuid-dev zlib1g-dev libvpl2
+          "
+
+          # Ubuntu package availability shifts between releases; install what
+          # exists and report the rest instead of failing the whole job.
+          sudo apt-get update -qq
+
+          available=""
+          missing=""
+          for pkg in $PACKAGES; do
+            if apt-cache show "$pkg" >/dev/null 2>&1; then
+              available="$available $pkg"
+            else
+              missing="$missing $pkg"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::packages not available on this runner:$missing"
+          fi
+
+          # shellcheck disable=SC2086
+          sudo apt-get install -y --no-install-recommends $available
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ubuntu-24.04-x86_64
+          max-size: 2G
+
+      - name: Configure
+        run: cmake --preset ubuntu-ci -DENABLE_BROWSER=OFF
+
+      - name: Build
+        run: cmake --build build_ubuntu --parallel
+
+      # The build tree assembles a runnable layout in rundir/<config> with the
+      # RPATH already pointing at the sibling libraries, so no install needed.
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proaudio-ubuntu-24.04-x86_64
+          path: build_ubuntu/rundir
+          if-no-files-found: warn
+          retention-days: 7
+
+  windows:
+    name: Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Configure
+        run: cmake --preset windows-x64 -DENABLE_BROWSER=OFF
+
+      - name: Build
+        run: cmake --build --preset windows-x64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proaudio-windows-x64
+          path: build_x64/rundir
+          if-no-files-found: warn
+          retention-days: 7
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-14
+    timeout-minutes: 240
+    # The macOS preset expands OBS_CODESIGN_* from these; a fork has no signing
+    # secrets, so pin the ad-hoc identity and leave the team/profile empty.
+    env:
+      CODESIGN_IDENT: '-'
+      CODESIGN_TEAM: ''
+      PROVISIONING_PROFILE: ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Configure
+        run: cmake --preset macos -DENABLE_BROWSER=OFF
+
+      - name: Build
+        run: cmake --build build_macos --config RelWithDebInfo
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proaudio-macos-arm64
+          path: |
+            build_macos/frontend/RelWithDebInfo/OBS.app
+            build_macos/rundir
+          if-no-files-found: warn
+          retention-days: 7

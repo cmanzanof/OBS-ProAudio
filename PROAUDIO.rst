@@ -13,18 +13,26 @@ Ramas
 * ``main``: integración del fork.
 * ``feat/*``: un tema por rama, con commits atómicos (candidatos a PR upstream).
 
+Nombre
+------
+
+El producto se llama **ProAudio Studio**. El repositorio git se llama ``OBS-ProAudio`` por
+comodidad (es un fork de OBS Studio), pero el binario, el instalador, el título de la ventana y
+el README usan **ProAudio Studio** y aclaran que es un fork no oficial: el proyecto OBS tiene su
+propia política de marca y no queremos sugerir respaldo oficial.
+
 Remotes
 -------
 
 * ``upstream``: ``https://github.com/obsproject/obs-studio``
-* ``origin``: pendiente, el repositorio propio del fork.
+* ``origin``: ``https://github.com/cmanzanof/OBS-ProAudio``
 
 Puesta en marcha del remoto
 ---------------------------
 
 .. code:: bash
 
-   git remote add origin git@github.com:<usuario>/obs-proaudio.git
+   git remote add origin https://github.com/cmanzanof/OBS-ProAudio.git
    git push -u origin main
    git push -u origin feat/buses-core
 

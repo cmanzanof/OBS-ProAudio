@@ -72,6 +72,7 @@ private:
 	const char *uuid;
 	std::vector<OBSSignal> obsSignals;
 	obs_monitoring_type obsMonitoringType;
+	obs_source_solo_mode obsSoloMode;
 	bool obsMuted;
 
 	QBoxLayout *mainLayout;
@@ -82,6 +83,8 @@ private:
 	VolumeSlider *slider;
 	QPushButton *muteButton;
 	QPushButton *monitorButton;
+	/* ProAudio: headphone preview (AFL/PFL) toggle */
+	QPushButton *soloButton;
 
 	OBSFader obs_fader;
 
@@ -102,6 +105,7 @@ private:
 	static void obsVolumeMuted(void *data, calldata_t *calldata);
 	static void obsMixersChanged(void *data, calldata_t *);
 	static void obsMonitoringChanged(void *data, calldata_t *);
+	static void obsSoloModeChanged(void *data, calldata_t *);
 	static void obsSourceActivated(void *data, calldata_t *params);
 	static void obsSourceDeactivated(void *data, calldata_t *params);
 	static void obsSourceDestroy(void *data, calldata_t *params);
@@ -113,6 +117,8 @@ private:
 
 	void setMuted(bool mute);
 	void setMonitoring(obs_monitoring_type type);
+	void setSoloMode(enum obs_source_solo_mode mode);
+	void showSoloMenu(QPoint pos = QPoint(0, 0));
 
 public slots:
 	void setUseDisabledColors(bool greyscale);
@@ -125,6 +131,7 @@ private slots:
 
 	void handleMuteButton(bool checked);
 	void handleMonitorButton(bool checked);
+	void handleSoloButton(bool checked);
 	void sliderChanged(int vol);
 	void updateText();
 	void setName(QString name);
@@ -132,6 +139,7 @@ private slots:
 	void onSourceActiveChanged(bool active);
 	void onMuteChanged(bool muted);
 	void onMonitoringChanged(int type);
+	void onSoloModeChanged(int mode);
 	void onSourceDestroyed() { deleteLater(); }
 
 signals:
@@ -162,7 +170,7 @@ public:
 	QWidget *firstWidget() const { return qobject_cast<QWidget *>(nameButton); }
 	QWidget *lastWidget() const
 	{
-		return vertical ? qobject_cast<QWidget *>(monitorButton) : qobject_cast<QWidget *>(slider);
+		return vertical ? qobject_cast<QWidget *>(soloButton) : qobject_cast<QWidget *>(slider);
 	}
 
 	void updateName();

@@ -175,6 +175,13 @@ AudioMixer::AudioMixer(QWidget *parent) : QFrame(parent)
 	createMixerContextMenu();
 	optionsButton->setMenu(mixerMenu);
 
+	soloButton = new QPushButton(mixerToolbar);
+	soloButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
+	idian::Utils::addClass(soloButton, "toolbar-button");
+	soloButton->setToolTip(QTStr("Basic.ProAudio.Solo.ClearAll"));
+	soloButton->setVisible(false);
+	connect(soloButton, &QPushButton::clicked, this, &AudioMixer::clearAllSolos);
+
 	toggleHiddenButton = new QPushButton(mixerToolbar);
 	toggleHiddenButton->setCheckable(true);
 	toggleHiddenButton->setChecked(showHidden);
@@ -187,6 +194,8 @@ AudioMixer::AudioMixer(QWidget *parent) : QFrame(parent)
 	idian::Utils::addClass(toggleHiddenButton, "toggle-hidden");
 
 	mixerToolbar->addWidget(toggleHiddenButton);
+
+	mixerToolbar->addWidget(soloButton);
 
 	mixerToolbar->addSeparator();
 	mixerToolbar->addWidget(spacer);
@@ -204,7 +213,7 @@ AudioMixer::AudioMixer(QWidget *parent) : QFrame(parent)
 	idian::Utils::addClass(advAudioWidget, "icon-cogs");
 
 	// Connect to OBS signals
-	signalHandlers.reserve(signalHandlers.size() + 8);
+	signalHandlers.reserve(signalHandlers.size() + 10);
 	signalHandlers.emplace_back(obs_get_signal_handler(), "source_create", AudioMixer::obsSourceCreate, this);
 	signalHandlers.emplace_back(obs_get_signal_handler(), "source_remove", AudioMixer::obsSourceRemove, this);
 	signalHandlers.emplace_back(obs_get_signal_handler(), "source_destroy", AudioMixer::obsSourceRemove, this);
@@ -216,6 +225,8 @@ AudioMixer::AudioMixer(QWidget *parent) : QFrame(parent)
 				    AudioMixer::obsSourceAudioActivated, this);
 	signalHandlers.emplace_back(obs_get_signal_handler(), "source_audio_deactivate",
 				    AudioMixer::obsSourceAudioDeactivated, this);
+	signalHandlers.emplace_back(obs_get_signal_handler(), "source_solo_mode",
+				    AudioMixer::obsSourceSoloModeChanged, this);
 
 	obs_frontend_add_event_callback(AudioMixer::onFrontendEvent, this);
 
@@ -264,6 +275,8 @@ AudioMixer::AudioMixer(QWidget *parent) : QFrame(parent)
 	updateGlobalSources();
 
 	reloadVolumeControls();
+
+	updateSoloStatus();
 }
 
 AudioMixer::~AudioMixer()
@@ -611,6 +624,43 @@ void AudioMixer::queueLayoutUpdate()
 	if (!updateTimer.isActive()) {
 		updateTimer.start(0);
 	}
+}
+
+/* ProAudio: helpers to count and clear the sources that are being previewed
+ * on the monitoring (headphones) device. */
+static bool countSoloedSource(void *param, obs_source_t *source)
+{
+	if (obs_source_get_solo_mode(source) != OBS_SOLO_MODE_OFF) {
+		(*(size_t *)param)++;
+	}
+
+	return true;
+}
+
+static bool clearSoloedSource(void *param, obs_source_t *source)
+{
+	UNUSED_PARAMETER(param);
+
+	if (obs_source_get_solo_mode(source) != OBS_SOLO_MODE_OFF) {
+		obs_source_set_solo_mode(source, OBS_SOLO_MODE_OFF);
+	}
+
+	return true;
+}
+
+void AudioMixer::updateSoloStatus()
+{
+	size_t count = 0;
+
+	obs_enum_sources(countSoloedSource, &count);
+
+	soloButton->setText(QTStr("Basic.ProAudio.Solo.Indicator").arg(count));
+	soloButton->setVisible(count > 0);
+}
+
+void AudioMixer::clearAllSolos()
+{
+	obs_enum_sources(clearSoloedSource, nullptr);
 }
 
 void AudioMixer::updateVolumeLayouts()
@@ -1079,6 +1129,15 @@ void AudioMixer::obsSourceCreate(void *data, calldata_t *params)
 		QMetaObject::invokeMethod(mixer, "addSource", Qt::QueuedConnection,
 					  Q_ARG(QString, QString::fromUtf8(uuidPointer)));
 	}
+}
+
+void AudioMixer::obsSourceSoloModeChanged(void *data, calldata_t *params)
+{
+	UNUSED_PARAMETER(params);
+
+	auto mixer = static_cast<AudioMixer *>(data);
+
+	QMetaObject::invokeMethod(mixer, "updateSoloStatus", Qt::QueuedConnection);
 }
 
 void AudioMixer::obsSourceRemove(void *data, calldata_t *params)

@@ -86,6 +86,8 @@ private:
 	QAction *advAudio{nullptr};
 	QPushButton *optionsButton{nullptr};
 	QPushButton *toggleHiddenButton{nullptr};
+	/* ProAudio: indicator with the number of sources in solo */
+	QPushButton *soloButton{nullptr};
 
 	QPointer<QMenu> mixerMenu;
 	QPointer<MenuCheckBox> showHiddenCheckBox;
@@ -125,6 +127,7 @@ private:
 	static void obsSourceRemove(void *data, calldata_t *params);
 	static void obsSourceRename(void *data, calldata_t *params);
 	static void obsSceneItemVisibleChange(void *data, calldata_t *params);
+	static void obsSourceSoloModeChanged(void *data, calldata_t *params);
 
 private slots:
 	void addSource(QString uuid);
@@ -133,6 +136,8 @@ private slots:
 	void updateGlobalSources();
 	void unhideAllAudioControls();
 	void queueLayoutUpdate();
+	void updateSoloStatus();
+	void clearAllSolos();
 
 	VolumeControl *createVolumeControl(obs_source_t *source);
 	void updateControlVisibility(QString uuid);

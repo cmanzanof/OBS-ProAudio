@@ -79,6 +79,12 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 	monitorButton->setCheckable(true);
 	utils->addClass(monitorButton, "btn-monitor");
 
+	soloButton = new QPushButton(this);
+	soloButton->setCheckable(true);
+	soloButton->setText("S");
+	soloButton->setMaximumWidth(24);
+	utils->addClass(soloButton, "btn-solo");
+
 	volumeLabel = new QLabel(this);
 	volumeLabel->setIndent(0);
 	volumeLabel->setObjectName("volLabel");
@@ -92,12 +98,14 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 
 	utils->applyStateStylingEventFilter(muteButton);
 	utils->applyStateStylingEventFilter(monitorButton);
+	utils->applyStateStylingEventFilter(soloButton);
 
 	volumeMeter = new VolumeMeter(this, source);
 
 	obsMuted = obs_source_muted(source);
 	bool unassigned = isSourceUnassigned(source);
 	obsMonitoringType = obs_source_get_monitoring_type(source);
+	obsSoloMode = obs_source_get_solo_mode(source);
 
 	volumeMeter->setMuted(obsMuted || unassigned);
 
@@ -106,10 +114,11 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 
 	obs_fader_add_callback(obs_fader, obsVolumeChanged, this);
 
-	obsSignals.reserve(9);
+	obsSignals.reserve(10);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "mute", obsVolumeMuted, this);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "audio_mixers", obsMixersChanged, this);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "audio_monitoring", obsMonitoringChanged, this);
+	obsSignals.emplace_back(obs_source_get_signal_handler(source), "solo_mode", obsSoloModeChanged, this);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "activate", VolumeControl::obsSourceActivated,
 				this);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "deactivate",
@@ -132,6 +141,11 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 	connect(slider, &VolumeSlider::valueChanged, this, &VolumeControl::sliderChanged);
 	connect(muteButton, &QPushButton::clicked, this, &VolumeControl::handleMuteButton);
 	connect(monitorButton, &QPushButton::clicked, this, &VolumeControl::handleMonitorButton);
+	connect(soloButton, &QPushButton::clicked, this, &VolumeControl::handleSoloButton);
+
+	soloButton->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(soloButton, &QWidget::customContextMenuRequested, this,
+		[this](QPoint pos) { showSoloMenu(pos); });
 
 	OBSBasic *main = OBSBasic::Get();
 	if (main) {
@@ -215,6 +229,14 @@ void VolumeControl::obsMixersChanged(void *data, calldata_t *)
 	QMetaObject::invokeMethod(volControl, "processMixerState", Qt::QueuedConnection);
 }
 
+void VolumeControl::obsSoloModeChanged(void *data, calldata_t *params)
+{
+	VolumeControl *volControl = static_cast<VolumeControl *>(data);
+	auto mode = static_cast<int>(calldata_int(params, "mode"));
+
+	QMetaObject::invokeMethod(volControl, "onSoloModeChanged", Qt::QueuedConnection, Q_ARG(int, mode));
+}
+
 void VolumeControl::obsMonitoringChanged(void *data, calldata_t *params)
 {
 	VolumeControl *volControl = static_cast<VolumeControl *>(data);
@@ -290,6 +312,7 @@ void VolumeControl::setLayoutVertical(bool vertical)
 		// Add Headphone (audio monitoring) widget here
 		controlLayout->addWidget(muteButton);
 		controlLayout->addWidget(monitorButton);
+		controlLayout->addWidget(soloButton);
 
 		meterLayout->setContentsMargins(0, 0, 0, 0);
 		meterLayout->setSpacing(0);
@@ -365,6 +388,7 @@ void VolumeControl::setLayoutVertical(bool vertical)
 
 		buttonLayout->addWidget(muteButton);
 		buttonLayout->addWidget(monitorButton);
+		buttonLayout->addWidget(soloButton);
 
 		controlLayout->addItem(buttonLayout);
 		controlLayout->addWidget(meterFrame);
@@ -511,6 +535,44 @@ void VolumeControl::showVolumeControlMenu(QPoint pos)
 	connect(popup, &QMenu::aboutToHide, popup, &QMenu::deleteLater);
 }
 
+/* ProAudio: right click on the solo button picks the listen mode, like vMix's
+ * AFL/PFL setting. */
+void VolumeControl::showSoloMenu(QPoint pos)
+{
+	OBSSource source = OBSGetStrongRef(weakSource());
+	if (!source) {
+		return;
+	}
+
+	enum obs_source_solo_mode mode = obs_source_get_solo_mode(source);
+
+	QMenu popup(this);
+	QAction *offAction = popup.addAction(QTStr("Basic.ProAudio.Solo.Off"));
+	QAction *aflAction = popup.addAction(QTStr("Basic.ProAudio.Solo.AFL"));
+	QAction *pflAction = popup.addAction(QTStr("Basic.ProAudio.Solo.PFL"));
+
+	offAction->setCheckable(true);
+	aflAction->setCheckable(true);
+	pflAction->setCheckable(true);
+
+	offAction->setChecked(mode == OBS_SOLO_MODE_OFF);
+	aflAction->setChecked(mode == OBS_SOLO_MODE_AFL);
+	pflAction->setChecked(mode == OBS_SOLO_MODE_PFL);
+
+	QAction *chosen = popup.exec(soloButton->mapToGlobal(pos));
+	if (!chosen) {
+		return;
+	}
+
+	if (chosen == offAction) {
+		setSoloMode(OBS_SOLO_MODE_OFF);
+	} else if (chosen == aflAction) {
+		setSoloMode(OBS_SOLO_MODE_AFL);
+	} else if (chosen == pflAction) {
+		setSoloMode(OBS_SOLO_MODE_PFL);
+	}
+}
+
 void VolumeControl::renameSource()
 {
 	QAction *action = reinterpret_cast<QAction *>(sender());
@@ -611,6 +673,12 @@ void VolumeControl::onMuteChanged(bool muted)
 void VolumeControl::onMonitoringChanged(int type)
 {
 	obsMonitoringType = static_cast<obs_monitoring_type>(type);
+	processMixerState();
+}
+
+void VolumeControl::onSoloModeChanged(int mode)
+{
+	obsSoloMode = static_cast<obs_source_solo_mode>(mode);
 	processMixerState();
 }
 
@@ -742,6 +810,31 @@ void VolumeControl::setMonitoring(obs_monitoring_type type)
 					   std::bind(undo_redo, std::placeholders::_1, type), uuid, uuid);
 }
 
+void VolumeControl::setSoloMode(enum obs_source_solo_mode mode)
+{
+	OBSSource source = OBSGetStrongRef(weakSource());
+	if (!source) {
+		return;
+	}
+
+	enum obs_source_solo_mode prev = obs_source_get_solo_mode(source);
+	if (prev == mode) {
+		return;
+	}
+
+	obs_source_set_solo_mode(source, mode);
+
+	auto undo_redo = [](const std::string &uuid, int val) {
+		OBSSourceAutoRelease source = obs_get_source_by_uuid(uuid.c_str());
+		obs_source_set_solo_mode(source, (enum obs_source_solo_mode)val);
+	};
+
+	const char *name = obs_source_get_name(source);
+	OBSBasic::Get()->undo_s.add_action(QTStr("Undo.SoloMode.Change").arg(name),
+					   std::bind(undo_redo, std::placeholders::_1, (int)prev),
+					   std::bind(undo_redo, std::placeholders::_1, (int)mode), uuid, uuid);
+}
+
 void VolumeControl::onSourceActiveChanged(bool active)
 {
 	processMixerState();
@@ -769,6 +862,7 @@ void VolumeControl::processMixerState()
 
 	QSignalBlocker blockMute(muteButton);
 	QSignalBlocker blockMonitor(monitorButton);
+	QSignalBlocker blockSolo(soloButton);
 
 	bool showAsMuted = obsMuted || obsMonitoringType == OBS_MONITORING_TYPE_MONITOR_ONLY;
 	bool showAsMonitored = obsMonitoringType != OBS_MONITORING_TYPE_NONE;
@@ -809,8 +903,24 @@ void VolumeControl::processMixerState()
 
 	utils->toggleClass(muteButton, "mute-warning", showWarningIcon);
 
+	/* ProAudio: solo (headphone preview).  The button reflects whether this
+	 * source is being previewed and, when it is, which listen mode is on. */
+	bool soloed = obsSoloMode != OBS_SOLO_MODE_OFF;
+	QString soloTooltip = QTStr("Basic.ProAudio.Solo.Tooltip");
+
+	if (soloed) {
+		QString mode = QTStr(obsSoloMode == OBS_SOLO_MODE_PFL ? "Basic.ProAudio.Solo.PFL"
+								     : "Basic.ProAudio.Solo.AFL");
+		soloTooltip = mode + "\n" + soloTooltip;
+	}
+
+	soloButton->setChecked(soloed);
+	soloButton->setToolTip(soloTooltip);
+	utils->toggleClass(soloButton, "checked", soloed);
+
 	style()->polish(muteButton);
 	style()->polish(monitorButton);
+	style()->polish(soloButton);
 
 	updateCategoryLabel();
 }
@@ -830,6 +940,19 @@ void VolumeControl::handleMonitorButton(bool enableMonitoring)
 							 : OBS_MONITORING_TYPE_NONE;
 
 	setMonitoring(newType);
+}
+
+void VolumeControl::handleSoloButton(bool checked)
+{
+	/* Clicking the button soloes with the mode that was picked in the strip
+	 * menu; AFL is the default, like vMix. */
+	enum obs_source_solo_mode mode = OBS_SOLO_MODE_OFF;
+
+	if (checked) {
+		mode = (obsSoloMode == OBS_SOLO_MODE_OFF) ? OBS_SOLO_MODE_AFL : obsSoloMode;
+	}
+
+	setSoloMode(mode);
 }
 
 void VolumeControl::sliderChanged(int vol)
@@ -904,12 +1027,14 @@ void VolumeControl::updateTabOrder()
 		setTabOrder(nameButton, slider);
 		setTabOrder(slider, muteButton);
 		setTabOrder(muteButton, monitorButton);
-		setTabOrder(monitorButton, lastFocus);
+		setTabOrder(monitorButton, soloButton);
+		setTabOrder(soloButton, lastFocus);
 	} else {
 		setTabOrder(prevFocus, nameButton);
 		setTabOrder(nameButton, muteButton);
 		setTabOrder(muteButton, monitorButton);
-		setTabOrder(monitorButton, slider);
+		setTabOrder(monitorButton, soloButton);
+		setTabOrder(soloButton, slider);
 		setTabOrder(slider, lastFocus);
 	}
 }
@@ -924,6 +1049,7 @@ void VolumeControl::setName(QString name)
 	sourceName = name;
 
 	muteButton->setAccessibleName(QTStr("VolControl.Mute").arg(name));
+	soloButton->setAccessibleName(QTStr("Basic.ProAudio.SoloSource").arg(name));
 }
 
 void VolumeControl::setMeterDecayRate(qreal q)

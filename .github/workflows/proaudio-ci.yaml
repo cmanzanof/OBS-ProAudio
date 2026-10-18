@@ -6,6 +6,21 @@ name: ProAudio CI
 # The browser plugin (CEF) is disabled so the build does not need the ~1 GB
 # dependency download. ProAudio Studio only changes audio, so CEF is
 # orthogonal; set ENABLE_BROWSER=ON locally when it matters.
+#
+# Three requirements bite us early, in this order:
+#
+#  1. The release tags must be pushed. cmake/common/versionconfig.cmake derives
+#     the project version from `git describe --tags`; a clone without tags gets
+#     a bare commit hash and `project(... VERSION <hash>)` aborts seconds into
+#     configure, on every platform.
+#  2. macOS needs the 26.5 SDK, i.e. Xcode 26.5 (cmake/macos/compilerconfig.cmake
+#     enforces it), so it runs on `macos-26` and pins the Xcode it finds there.
+#  3. The windows-x64 preset asks for the "Visual Studio 18 2026" generator and
+#     the 10.0.26100 SDK, so it runs on `windows-2025-vs2026` (windows-2022 only
+#     ships VS 2022).
+#
+# Every failing job dumps the tail of its log as `::error::` annotations: the
+# job-log API requires admin rights, but annotations are world-readable.
 
 on:
   push:
@@ -26,15 +41,22 @@ concurrency:
 
 jobs:
   ubuntu:
-    name: Ubuntu x86_64
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    name: Ubuntu (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      # Upstream ships for both; the apt package set shifts between releases, so
+      # building the pair tells us which one the fork can rely on.
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Install build dependencies
         run: |
@@ -85,41 +107,70 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ubuntu-24.04-x86_64
+          key: ${{ matrix.os }}-x86_64
           max-size: 2G
 
       - name: Configure
-        run: cmake --preset ubuntu-ci -DENABLE_BROWSER=OFF
+        run: |
+          set -o pipefail
+          cmake --preset ubuntu-ci -DENABLE_BROWSER=OFF 2>&1 | tee ci.log
 
       - name: Build
-        run: cmake --build build_ubuntu --parallel
+        run: |
+          set -o pipefail
+          cmake --build build_ubuntu --parallel 2>&1 | tee -a ci.log
+
+      - name: Dump log as annotations (on failure)
+        if: failure()
+        shell: bash
+        run: |
+          [ -f ci.log ] || exit 0
+          tail -n 240 ci.log | tac | split -l 8 - chunk_ || exit 0
+          for c in chunk_*; do echo "::error::$(tr '\n' '~' < "$c")"; done
+          rm -f chunk_*
 
       # The build tree assembles a runnable layout in rundir/<config> with the
       # RPATH already pointing at the sibling libraries, so no install needed.
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: proaudio-ubuntu-24.04-x86_64
+          name: proaudio-${{ matrix.os }}-x86_64
           path: build_ubuntu/rundir
           if-no-files-found: warn
           retention-days: 7
 
   windows:
     name: Windows x64
-    runs-on: windows-2022
-    timeout-minutes: 240
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 300
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Configure
-        run: cmake --preset windows-x64 -DENABLE_BROWSER=OFF
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --preset windows-x64 -DENABLE_BROWSER=OFF 2>&1 | tee ci.log
 
       - name: Build
-        run: cmake --build --preset windows-x64
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build --preset windows-x64 2>&1 | tee -a ci.log
+
+      - name: Dump log as annotations (on failure)
+        if: failure()
+        shell: bash
+        run: |
+          [ -f ci.log ] || exit 0
+          tail -n 240 ci.log | tac | split -l 8 - chunk_ || exit 0
+          for c in chunk_*; do echo "::error::$(tr '\n' '~' < "$c")"; done
+          rm -f chunk_*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -131,8 +182,8 @@ jobs:
 
   macos:
     name: macOS arm64
-    runs-on: macos-14
-    timeout-minutes: 240
+    runs-on: macos-26
+    timeout-minutes: 300
     # The macOS preset expands OBS_CODESIGN_* from these; a fork has no signing
     # secrets, so pin the ad-hoc identity and leave the team/profile empty.
     env:
@@ -145,12 +196,37 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+          fetch-tags: true
+
+      # The image ships more than one Xcode and configure refuses anything older
+      # than 26.5, so select it explicitly instead of trusting the default.
+      - name: Select Xcode 26.5
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          if [ -d /Applications/Xcode_26.5.app ]; then
+            sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer
+          fi
+          xcodebuild -version || true
+          xcrun --sdk macosx --show-sdk-platform-version || true
 
       - name: Configure
-        run: cmake --preset macos -DENABLE_BROWSER=OFF
+        run: |
+          set -o pipefail
+          cmake --preset macos -DENABLE_BROWSER=OFF 2>&1 | tee ci.log
 
       - name: Build
-        run: cmake --build build_macos --config RelWithDebInfo
+        run: |
+          set -o pipefail
+          cmake --build build_macos --config RelWithDebInfo 2>&1 | tee -a ci.log
+
+      - name: Dump log as annotations (on failure)
+        if: failure()
+        shell: bash
+        run: |
+          [ -f ci.log ] || exit 0
+          tail -n 240 ci.log | tac | split -l 8 - chunk_ || exit 0
+          for c in chunk_*; do echo "::error::$(tr '\n' '~' < "$c")"; done
+          rm -f chunk_*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

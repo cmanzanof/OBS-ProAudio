@@ -62,6 +62,10 @@ Además, cada job que falla vuelca el final de su log como anotaciones ``::error
 logs de jobs requiere permisos de administración, pero las anotaciones se leen sin
 autenticación.
 
+Primera corrida verde: Ubuntu 24.04, Ubuntu 26.04, Windows x64 y macOS arm64 compilan el fork y
+publican un artefacto por plataforma. Los pushes que solo tocan documentación (``**.rst``,
+``**.md``) no disparan builds.
+
 Modelo de audio
 ---------------
 
@@ -102,7 +106,8 @@ Registro de cambios propios
 * **CI**: primer arranque del workflow del fork. Se publican los tags de upstream en ``origin``
   (sin ellos ``versionconfig.cmake`` rompe el configure), el job de macOS pasa a ``macos-26`` con
   Xcode 26.5, el de Windows a ``windows-2025-vs2026`` y Ubuntu compila contra 24.04 y 26.04. Los
-  jobs que fallan vuelcan el final de su log como anotaciones.
+  jobs que fallan vuelcan el final de su log como anotaciones y los pushes de solo-docs no
+  disparan builds. Primera corrida verde: F1.1 y F1.2 compilan en las cuatro plataformas.
 
 Licencia
 --------

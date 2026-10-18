@@ -880,6 +880,11 @@ struct obs_source {
 	struct obs_audio_data audio_data;
 	size_t audio_storage_size;
 	uint32_t audio_mixers;
+	/* Post-fader gain applied to each mix independently.  A mix the source
+	 * is not routed to via audio_mixers gets no audio at all, so the
+	 * effective send gain for those mixes is 0 regardless of this value.
+	 * 1.0 behaves exactly like the pre-bus code path. */
+	float bus_send[MAX_AUDIO_MIXES];
 	float user_volume;
 	float volume;
 	int64_t sync_offset;

@@ -1247,6 +1247,22 @@ EXPORT void obs_source_set_audio_mixers(obs_source_t *source, uint32_t mixers);
 EXPORT uint32_t obs_source_get_audio_mixers(const obs_source_t *source);
 
 /**
+ * Sets the send gain of a source for a single audio mixer (bus).
+ *
+ * The source has to be routed to that mixer via obs_source_set_audio_mixers()
+ * for the audio to be heard at all; this value is the gain applied on top of
+ * the source volume, after filters, for that mixer only.  Defaults to 1.0.
+ *
+ * @param source  Source to change the send of
+ * @param bus     Audio mixer index (0 = master, 1..MAX_AUDIO_MIXES-1 = buses)
+ * @param volume  Send gain, negative values are clamped to 0.0
+ */
+EXPORT void obs_source_set_bus_send(obs_source_t *source, size_t bus, float volume);
+
+/** Gets the send gain of a source for a single audio mixer (bus). */
+EXPORT float obs_source_get_bus_send(const obs_source_t *source, size_t bus);
+
+/**
  * Increments the 'showing' reference counter to indicate that the source is
  * being shown somewhere.  If the reference counter was 0, will call the 'show'
  * callback.

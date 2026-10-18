@@ -258,6 +258,8 @@ static bool obs_source_init(struct obs_source *source)
 
 	source->deinterlace_top_first = true;
 	source->audio_mixers = 0xFF;
+	for (size_t mix = 0; mix < MAX_AUDIO_MIXES; mix++)
+		source->bus_send[mix] = 1.0f;
 
 	source->private_settings = obs_data_create();
 	return true;
@@ -663,6 +665,7 @@ obs_source_t *obs_source_duplicate(obs_source_t *source, const char *new_name, b
 				    : obs_source_create(source->info.id, new_name, settings, NULL);
 
 	new_source->audio_mixers = source->audio_mixers;
+	memcpy(new_source->bus_send, source->bus_send, sizeof(new_source->bus_send));
 	new_source->sync_offset = source->sync_offset;
 	new_source->user_volume = source->user_volume;
 	new_source->user_muted = source->user_muted;
@@ -4847,6 +4850,48 @@ uint32_t obs_source_get_audio_mixers(const obs_source_t *source)
 	return source->audio_mixers;
 }
 
+void obs_source_set_bus_send(obs_source_t *source, size_t bus, float volume)
+{
+	struct calldata data;
+	uint8_t stack[128];
+
+	if (!obs_source_valid(source, "obs_source_set_bus_send"))
+		return;
+	if (!source->owns_info_id && (source->info.output_flags & OBS_SOURCE_AUDIO) == 0)
+		return;
+	if (bus >= MAX_AUDIO_MIXES)
+		return;
+
+	if (volume < 0.0f)
+		volume = 0.0f;
+
+	calldata_init_fixed(&data, stack, sizeof(stack));
+	calldata_set_ptr(&data, "source", source);
+	calldata_set_int(&data, "bus", (long long)bus);
+	calldata_set_float(&data, "volume", volume);
+
+	signal_handler_signal(source->context.signals, "bus_send", &data);
+
+	volume = (float)calldata_float(&data, "volume");
+
+	/* Unlike the source volume, bus sends are not queued as audio actions:
+	 * they take effect on the next audio tick.  Fades for Audio Follow Video
+	 * will go through the action mechanism once it supports per-bus data. */
+	source->bus_send[bus] = volume;
+}
+
+float obs_source_get_bus_send(const obs_source_t *source, size_t bus)
+{
+	if (!obs_source_valid(source, "obs_source_get_bus_send"))
+		return 0.0f;
+	if (!source->owns_info_id && (source->info.output_flags & OBS_SOURCE_AUDIO) == 0)
+		return 0.0f;
+	if (bus >= MAX_AUDIO_MIXES)
+		return 0.0f;
+
+	return source->bus_send[bus];
+}
+
 void obs_source_draw_set_color_matrix(const struct matrix4 *color_matrix, const struct vec3 *color_range_min,
 				      const struct vec3 *color_range_max)
 {
@@ -5290,8 +5335,13 @@ static void apply_audio_actions(obs_source_t *source, size_t channels, size_t sa
 	pthread_mutex_unlock(&source->audio_actions_mutex);
 
 	for (size_t mix = 0; mix < MAX_AUDIO_MIXES; mix++) {
-		if ((source->audio_mixers & (1 << mix)) != 0)
-			multiply_vol_data(source, mix, channels, vol_data);
+		if ((source->audio_mixers & (1 << mix)) == 0)
+			continue;
+
+		multiply_vol_data(source, mix, channels, vol_data);
+
+		if (source->bus_send[mix] != 1.0f)
+			multiply_output_audio(source, mix, channels, source->bus_send[mix]);
 	}
 }
 
@@ -5319,9 +5369,6 @@ static void apply_audio_volume(obs_source_t *source, uint32_t mixers, size_t cha
 	}
 
 	vol = get_source_volume(source, source->audio_ts);
-	if (vol == 1.0f)
-		return;
-
 	if (vol == 0.0f || mixers == 0) {
 		memset(source->audio_output_buf[0][0], 0,
 		       AUDIO_OUTPUT_FRAMES * sizeof(float) * MAX_AUDIO_CHANNELS * MAX_AUDIO_MIXES);
@@ -5330,8 +5377,12 @@ static void apply_audio_volume(obs_source_t *source, uint32_t mixers, size_t cha
 
 	for (size_t mix = 0; mix < MAX_AUDIO_MIXES; mix++) {
 		uint32_t mix_and_val = (1 << mix);
-		if ((source->audio_mixers & mix_and_val) != 0 && (mixers & mix_and_val) != 0)
-			multiply_output_audio(source, mix, channels, vol);
+		if ((source->audio_mixers & mix_and_val) == 0 || (mixers & mix_and_val) == 0)
+			continue;
+
+		const float gain = vol * source->bus_send[mix];
+		if (gain != 1.0f)
+			multiply_output_audio(source, mix, channels, gain);
 	}
 }
 

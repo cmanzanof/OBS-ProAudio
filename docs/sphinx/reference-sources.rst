@@ -1207,6 +1207,22 @@ General Source Functions
 
 ---------------------
 
+.. function:: void obs_source_set_bus_send(obs_source_t *source, size_t bus, float volume)
+              float obs_source_get_bus_send(const obs_source_t *source, size_t bus)
+
+   Sets/gets the send gain of a source for a single audio mixer (bus).
+
+   The source still has to be routed to that mixer through
+   :c:func:`obs_source_set_audio_mixers()` for its audio to reach the mixer at
+   all.  The send gain is applied on top of the source volume, after filters,
+   and defaults to 1.0.
+
+   :param bus: Audio mixer index.  Mixer 0 is the master mixer, mixers 1 to
+               MAX_AUDIO_MIXES - 1 are the auxiliary buses.
+   :param volume: Send gain.  Negative values are clamped to 0.0.
+
+---------------------
+
 .. function:: void obs_source_set_monitoring_type(obs_source_t *source, enum obs_monitoring_type type)
               enum obs_monitoring_type obs_source_get_monitoring_type(obs_source_t *source)
 

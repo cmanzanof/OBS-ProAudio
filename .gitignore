@@ -32,6 +32,7 @@
 !COPYING
 !INSTALL
 !README.rst
+!PROAUDIO.rst
 
 # Exclude lock files
 *.lock.json

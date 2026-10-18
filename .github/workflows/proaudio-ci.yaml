@@ -27,6 +27,11 @@ on:
     branches:
       - main
       - 'feat/**'
+    # A docs-only push does not need four runners and 20 minutes; upstream
+    # filters '**.md' the same way.
+    paths-ignore:
+      - '**.rst'
+      - '**.md'
   pull_request:
     branches:
       - main

@@ -88,6 +88,8 @@ private:
 	QPushButton *toggleHiddenButton{nullptr};
 	/* ProAudio: indicator with the number of sources in solo */
 	QPushButton *soloButton{nullptr};
+	/* ProAudio: opens the bus and headphones level dialog */
+	QPushButton *busMixerButton{nullptr};
 
 	QPointer<QMenu> mixerMenu;
 	QPointer<MenuCheckBox> showHiddenCheckBox;
@@ -138,6 +140,7 @@ private slots:
 	void queueLayoutUpdate();
 	void updateSoloStatus();
 	void clearAllSolos();
+	void showBusMixer();
 
 	VolumeControl *createVolumeControl(obs_source_t *source);
 	void updateControlVisibility(QString uuid);

@@ -18,6 +18,7 @@
 #include "AudioMixer.hpp"
 
 #include <components/MenuCheckBox.hpp>
+#include <components/ProAudioBusMixer.hpp>
 #include <dialogs/NameDialog.hpp>
 #include <utility/item-widget-helpers.hpp>
 #include <widgets/OBSBasic.hpp>
@@ -182,6 +183,14 @@ AudioMixer::AudioMixer(QWidget *parent) : QFrame(parent)
 	soloButton->setVisible(false);
 	connect(soloButton, &QPushButton::clicked, this, &AudioMixer::clearAllSolos);
 
+	/* ProAudio: the master faders of the buses and the headphones volume */
+	busMixerButton = new QPushButton(mixerToolbar);
+	busMixerButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
+	idian::Utils::addClass(busMixerButton, "toolbar-button");
+	busMixerButton->setText(QTStr("Basic.ProAudio.BusMixer.Button"));
+	busMixerButton->setToolTip(QTStr("Basic.ProAudio.BusMixer.ButtonTooltip"));
+	connect(busMixerButton, &QPushButton::clicked, this, &AudioMixer::showBusMixer);
+
 	toggleHiddenButton = new QPushButton(mixerToolbar);
 	toggleHiddenButton->setCheckable(true);
 	toggleHiddenButton->setChecked(showHidden);
@@ -196,6 +205,8 @@ AudioMixer::AudioMixer(QWidget *parent) : QFrame(parent)
 	mixerToolbar->addWidget(toggleHiddenButton);
 
 	mixerToolbar->addWidget(soloButton);
+
+	mixerToolbar->addWidget(busMixerButton);
 
 	mixerToolbar->addSeparator();
 	mixerToolbar->addWidget(spacer);
@@ -663,6 +674,12 @@ void AudioMixer::clearAllSolos()
 	obs_enum_sources(clearSoloedSource, nullptr);
 }
 
+void AudioMixer::showBusMixer()
+{
+	ProAudioBusMixer dialog(this);
+	dialog.exec();
+}
+
 void AudioMixer::updateVolumeLayouts()
 {
 	setUpdatesEnabled(false);
@@ -886,6 +903,9 @@ void AudioMixer::createMixerContextMenu()
 
 	QAction *openAdvancedProperties = new QAction(QTStr("Basic.AdvAudio"), mixerMenu);
 
+	/* ProAudio: bus and headphones levels */
+	QAction *busMixerAction = new QAction(QTStr("Basic.ProAudio.BusMixer.Button"), mixerMenu);
+
 	// Connect menu actions
 	connect(unhideAllAction, &QAction::triggered, this, &AudioMixer::unhideAllAudioControls, Qt::DirectConnection);
 
@@ -901,6 +921,10 @@ void AudioMixer::createMixerContextMenu()
 	connect(openAdvancedProperties, &QAction::triggered, main, &OBSBasic::on_actionAdvAudioProperties_triggered,
 		Qt::DirectConnection);
 
+	/* ProAudio: the bus faders live in a dialog, which is opened from here
+	 * as well as from the toolbar. */
+	connect(busMixerAction, &QAction::triggered, this, &AudioMixer::showBusMixer, Qt::DirectConnection);
+
 	// Build menu and show
 	mixerMenu->addAction(unhideAllAction);
 	mixerMenu->addSeparator();
@@ -911,6 +935,7 @@ void AudioMixer::createMixerContextMenu()
 	mixerMenu->addSeparator();
 	mixerMenu->addAction(layoutToggleAction);
 	mixerMenu->addSeparator();
+	mixerMenu->addAction(busMixerAction);
 	mixerMenu->addAction(openAdvancedProperties);
 
 	optionsButton->setMenu(mixerMenu);

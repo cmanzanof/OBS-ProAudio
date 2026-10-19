@@ -1091,6 +1091,10 @@ static const char *obs_signals[] = {
 	"void source_hide(ptr source)",
 	"void source_audio_activate(ptr source)",
 	"void source_audio_deactivate(ptr source)",
+	/* ProAudio: solo has to be visible to the whole UI, not only to the
+	 * widget that owns the source, so it is mirrored on the global handler
+	 * as well. */
+	"void source_solo_mode(ptr source, in out int mode)",
 	"void source_filter_add(ptr source, ptr filter)",
 	"void source_filter_remove(ptr source, ptr filter)",
 	"void source_rename(ptr source, string new_name, string prev_name)",

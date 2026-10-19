@@ -96,6 +96,8 @@ static const char *source_signals[] = {
 	"void audio_balance(ptr source, in out float balance)",
 	"void audio_mixers(ptr source, in out int mixers)",
 	"void audio_monitoring(ptr source, int type)",
+	"void bus_send(ptr source, int bus, in out float volume)",
+	"void solo_mode(ptr source, in out int mode)",
 	"void audio_activate(ptr source)",
 	"void audio_deactivate(ptr source)",
 	"void filter_add(ptr source, ptr filter)",

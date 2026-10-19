@@ -1,11 +1,15 @@
 #include "OBSAdvAudioCtrl.hpp"
 
+#include "ProAudioBuses.hpp"
+#include "ProAudioBusSends.hpp"
+
 #include <components/BalanceSlider.hpp>
 #include <widgets/OBSBasic.hpp>
 
 #include <qt-wrappers.hpp>
 
 #include <QCheckBox>
+#include <QPushButton>
 #include <QStackedWidget>
 
 #include "moc_OBSAdvAudioCtrl.cpp"
@@ -18,19 +22,6 @@
 #define MAX_DB 26.0
 
 static inline void setMixer(obs_source_t *source, const int mixerIdx, const bool checked);
-
-/* ProAudio: mixer 0 is the master mix and mixes 1..MAX_AUDIO_MIXES-1 are the
- * auxiliary buses A..G. */
-static QString busMixShortName(size_t mix)
-{
-	return mix == 0 ? QString("M") : QString(QChar('A' + (int)mix - 1));
-}
-
-static QString busMixName(size_t mix)
-{
-	return mix == 0 ? QTStr("Basic.ProAudio.Bus.Master")
-			: QTStr("Basic.ProAudio.Bus.Letter").arg(QChar('A' + (int)mix - 1));
-}
 
 OBSAdvAudioCtrl::OBSAdvAudioCtrl(QGridLayout *, obs_source_t *source_) : source(source_)
 {
@@ -184,9 +175,9 @@ OBSAdvAudioCtrl::OBSAdvAudioCtrl(QGridLayout *, obs_source_t *source_) : source(
 	/* ProAudio: one checkbox per mixer (master and buses A..G) */
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; i++) {
 		QCheckBox *mixer = new QCheckBox();
-		QString mixName = busMixName(i);
+		QString mixName = proAudioBusName(i);
 
-		mixer->setText(busMixShortName(i));
+		mixer->setText(proAudioBusShortName(i));
 		mixer->setChecked(mixers & (1 << i));
 		mixer->setToolTip(QTStr("Basic.ProAudio.BusSource").arg(sourceName, mixName));
 		mixer->setAccessibleName(QTStr("Basic.ProAudio.BusSource").arg(sourceName, mixName));
@@ -197,6 +188,19 @@ OBSAdvAudioCtrl::OBSAdvAudioCtrl(QGridLayout *, obs_source_t *source_) : source(
 		mixerContainer->layout()->addWidget(mixer);
 		mixerChecks.emplace_back(mixer);
 	}
+
+	/* ProAudio: the send level of each bus is set in a small dialog */
+	busSendsButton = new QPushButton(QString("dB"));
+	busSendsButton->setToolTip(QTStr("Basic.ProAudio.BusSends.Button"));
+	busSendsButton->setAccessibleName(QTStr("Basic.ProAudio.BusSends.Button"));
+	busSendsButton->setMaximumWidth(28);
+
+	connect(busSendsButton, &QPushButton::clicked, this, [this]() {
+		ProAudioBusSends dialog(source, OBSBasic::Get());
+		dialog.exec();
+	});
+
+	mixerContainer->layout()->addWidget(busSendsButton);
 
 	balanceContainer->layout()->addWidget(labelL);
 	balanceContainer->layout()->addWidget(balance);

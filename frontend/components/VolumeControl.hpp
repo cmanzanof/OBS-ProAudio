@@ -119,6 +119,7 @@ private:
 	void setMonitoring(obs_monitoring_type type);
 	void setSoloMode(enum obs_source_solo_mode mode);
 	void showSoloMenu(QPoint pos = QPoint(0, 0));
+	void showBusSends();
 
 public slots:
 	void setUseDisabledColors(bool greyscale);

@@ -11,6 +11,7 @@ class QComboBox;
 class QDoubleSpinBox;
 class QGridLayout;
 class QLabel;
+class QPushButton;
 class QSpinBox;
 class QStackedWidget;
 class QWidget;
@@ -44,6 +45,8 @@ private:
 	QPointer<QComboBox> soloMode;
 	/* ProAudio: one checkbox per mixer, i.e. master (M) and buses A..G */
 	std::vector<QPointer<QCheckBox>> mixerChecks;
+	/* ProAudio: opens the per bus send levels dialog */
+	QPointer<QPushButton> busSendsButton;
 
 	std::vector<OBSSignal> sigs;
 

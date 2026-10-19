@@ -1,5 +1,7 @@
 #include "VolumeControl.hpp"
 
+#include "ProAudioBusSends.hpp"
+
 #include <components/MuteCheckBox.hpp>
 #include <components/VolumeMeter.hpp>
 #include <components/VolumeName.hpp>
@@ -441,6 +443,9 @@ void VolumeControl::showVolumeControlMenu(QPoint pos)
 	QAction *unhideAllAction = new QAction(QTStr("UnhideAll"), popup);
 	QAction *mixerRenameAction = new QAction(QTStr("Rename"), popup);
 
+	/* ProAudio: per bus send levels of this source */
+	QAction *busSendsAction = new QAction(QTStr("Basic.ProAudio.BusSends.Button"), popup);
+
 	QAction *copyFiltersAction = new QAction(QTStr("Copy.Filters"), popup);
 	QAction *pasteFiltersAction = new QAction(QTStr("Paste.Filters"), popup);
 
@@ -474,6 +479,7 @@ void VolumeControl::showVolumeControlMenu(QPoint pos)
 	connect(pasteFiltersAction, &QAction::triggered, main, &OBSBasic::actionPasteFilters);
 
 	connect(mixerRenameAction, &QAction::triggered, this, &VolumeControl::renameSource);
+	connect(busSendsAction, &QAction::triggered, this, &VolumeControl::showBusSends);
 
 	connect(filtersAction, &QAction::triggered, main, &OBSBasic::actionOpenSourceFilters);
 	connect(propertiesAction, &QAction::triggered, main, &OBSBasic::actionOpenSourceProperties);
@@ -504,6 +510,7 @@ void VolumeControl::showVolumeControlMenu(QPoint pos)
 	popup->addSeparator();
 	popup->addAction(mixerRenameAction);
 	popup->addSeparator();
+	popup->addAction(busSendsAction);
 	popup->addAction(filtersAction);
 	popup->addAction(propertiesAction);
 
@@ -533,6 +540,18 @@ void VolumeControl::showVolumeControlMenu(QPoint pos)
 	popup->popup(popupPos);
 
 	connect(popup, &QMenu::aboutToHide, popup, &QMenu::deleteLater);
+}
+
+/* ProAudio: per bus send levels of a single source. */
+void VolumeControl::showBusSends()
+{
+	OBSSource source = OBSGetStrongRef(weakSource());
+	if (!source) {
+		return;
+	}
+
+	ProAudioBusSends dialog(source, window());
+	dialog.exec();
 }
 
 /* ProAudio: right click on the solo button picks the listen mode, like vMix's

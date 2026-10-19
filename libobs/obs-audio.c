@@ -105,6 +105,14 @@ static inline void mix_audio(struct audio_output_data *mixes, obs_source_t *sour
 	}
 
 	for (size_t mix_idx = 0; mix_idx < MAX_AUDIO_MIXES; mix_idx++) {
+		/* ProAudio: the master gain of a bus is applied while summing,
+		 * so it lands after the per source send and before the mix is
+		 * handed to any output. */
+		const float bus_gain = (float)os_atomic_load_long(&obs->audio.bus_volume_milli[mix_idx]) / 1000.0f;
+
+		if (bus_gain == 0.0f)
+			continue;
+
 		for (size_t ch = 0; ch < channels; ch++) {
 			register float *mix = mixes[mix_idx].data[ch];
 			register float *aud = source->audio_output_buf[mix_idx][ch];
@@ -113,8 +121,13 @@ static inline void mix_audio(struct audio_output_data *mixes, obs_source_t *sour
 			mix += start_point;
 			end = aud + total_floats;
 
-			while (aud < end)
-				*(mix++) += *(aud++);
+			if (bus_gain == 1.0f) {
+				while (aud < end)
+					*(mix++) += *(aud++);
+			} else {
+				while (aud < end)
+					*(mix++) += *(aud++) * bus_gain;
+			}
 		}
 	}
 }

@@ -885,6 +885,20 @@ EXPORT void obs_enum_audio_monitoring_devices(obs_enum_audio_device_cb cb, void 
 EXPORT bool obs_set_audio_monitoring_device(const char *name, const char *id);
 EXPORT void obs_get_audio_monitoring_device(const char **name, const char **id);
 
+/** Sets/gets the master gain of one of the audio mixes (buses).  Bus 0 is the
+ * master mix and 1..MAX_AUDIO_MIXES-1 are the auxiliary buses.
+ *
+ * @param bus     Audio mixer (bus) index
+ * @param volume  Bus gain, negative values are clamped to 0.0
+ */
+EXPORT void obs_audio_set_bus_volume(size_t bus, float volume);
+EXPORT float obs_audio_get_bus_volume(size_t bus);
+
+/** Sets/gets the gain of the audio monitoring (headphones) device, which is
+ * applied on top of whatever the device is playing. */
+EXPORT void obs_audio_set_monitoring_volume(float volume);
+EXPORT float obs_audio_get_monitoring_volume(void);
+
 EXPORT void obs_add_tick_callback(void (*tick)(void *param, float seconds), void *param);
 EXPORT void obs_remove_tick_callback(void (*tick)(void *param, float seconds), void *param);
 

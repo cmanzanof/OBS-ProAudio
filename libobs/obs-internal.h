@@ -464,6 +464,12 @@ struct obs_core_audio {
 
 	/* ProAudio: number of sources currently in a solo mode */
 	volatile long solo_count;
+
+	/* ProAudio: master gain of every bus (mix), and gain of the monitoring
+	 * (headphones) device.  They are stored as gain x 1000 so that the
+	 * audio thread can read them without taking a lock. */
+	volatile long bus_volume_milli[MAX_AUDIO_MIXES];
+	volatile long monitoring_volume_milli;
 };
 
 /* user sources, output channels, and displays */

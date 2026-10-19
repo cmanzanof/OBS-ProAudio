@@ -4967,18 +4967,26 @@ bool obs_source_solo_active(void)
 
 float obs_source_monitor_volume(const obs_source_t *source)
 {
-	/* PFL listens to the source before its own fader is applied. */
-	if (source->solo_mode == OBS_SOLO_MODE_PFL)
-		return 1.0f;
+	/* ProAudio: the headphones have their own gain, on top of whatever the
+	 * monitoring device happens to be playing. */
+	const float monitor_volume = obs_audio_get_monitoring_volume();
+	float volume;
 
-	/* While another source is soloed, only the soloed sources are heard on
-	 * the monitoring device.  The audio mixes are not affected at all. */
-	if (source->solo_mode == OBS_SOLO_MODE_OFF && obs_source_solo_active())
-		return 0.0f;
+	if (source->solo_mode == OBS_SOLO_MODE_PFL) {
+		/* PFL listens to the source before its own fader is applied. */
+		volume = 1.0f;
+	} else if (source->solo_mode == OBS_SOLO_MODE_OFF && obs_source_solo_active()) {
+		/* While another source is soloed, only the soloed sources are
+		 * heard on the monitoring device.  The audio mixes are not
+		 * affected at all. */
+		volume = 0.0f;
+	} else {
+		/* AFL, like regular monitoring, is post-fader.  Like vMix AFL it
+		 * stays audible even if the source is muted. */
+		volume = source->user_volume;
+	}
 
-	/* AFL, like regular monitoring, is post-fader.  Like vMix AFL it is
-	 * audible even if the source is muted. */
-	return source->user_volume;
+	return volume * monitor_volume;
 }
 
 void obs_source_draw_set_color_matrix(const struct matrix4 *color_matrix, const struct vec3 *color_range_min,

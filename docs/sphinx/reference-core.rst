@@ -586,6 +586,29 @@ Video, Audio, and Graphics
 
 ---------------------
 
+.. function:: void obs_audio_set_bus_volume(size_t bus, float volume)
+              float obs_audio_get_bus_volume(size_t bus)
+
+   Sets/gets the master gain of an audio mixer (bus).  Bus ``0`` is the master
+   mix and ``1..MAX_AUDIO_MIXES-1`` are the auxiliary buses.  The gain is applied
+   to the mix itself, after the per source volume and per bus sends, so it
+   affects every output fed from that bus but neither the other buses nor the
+   audio monitoring device.
+
+   .. versionadded:: 32.2
+
+---------------------
+
+.. function:: void obs_audio_set_monitoring_volume(float volume)
+              float obs_audio_get_monitoring_volume(void)
+
+   Sets/gets the gain of the audio monitoring (headphones) device.  It is
+   applied on top of whatever the device is playing, including soloed sources.
+
+   .. versionadded:: 32.2
+
+---------------------
+
 .. function:: void obs_add_main_render_callback(void (*draw)(void *param, uint32_t cx, uint32_t cy), void *param)
               void obs_remove_main_render_callback(void (*draw)(void *param, uint32_t cx, uint32_t cy), void *param)
 

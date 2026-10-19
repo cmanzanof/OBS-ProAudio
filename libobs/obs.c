@@ -16,7 +16,7 @@
 ******************************************************************************/
 
 #include <inttypes.h>
-
+#include <math.h>
 #include "graphics/matrix4.h"
 #include "callback/calldata.h"
 
@@ -919,6 +919,11 @@ static bool obs_init_audio(struct audio_output_info *ai)
 	audio->monitoring_device_id = bstrdup("default");
 	audio->monitoring_duplicating_source = NULL;
 
+	/* ProAudio: buses and the monitoring device start at unity gain */
+	for (size_t i = 0; i < MAX_AUDIO_MIXES; i++)
+		audio->bus_volume_milli[i] = 1000;
+	audio->monitoring_volume_milli = 1000;
+
 	signal_handler_add(obs->signals, "void deduplication_changed(ptr source)");
 	signal_handler_connect(obs->signals, "deduplication_changed", apply_monitoring_deduplication, NULL);
 
@@ -1103,6 +1108,10 @@ static const char *obs_signals[] = {
 	"void source_transition_start(ptr source)",
 	"void source_transition_video_stop(ptr source)",
 	"void source_transition_stop(ptr source)",
+
+	/* ProAudio: master gain of a bus and of the monitoring device */
+	"void bus_volume(int bus, in out float volume)",
+	"void monitoring_volume(in out float volume)",
 
 	"void channel_change(int channel, in out ptr source, ptr prev_source)",
 
@@ -3206,6 +3215,83 @@ void obs_remove_raw_audio_callback(size_t mix_idx, audio_output_callback_t callb
 {
 	struct obs_core_audio *audio = &obs->audio;
 	audio_output_disconnect(audio->audio, mix_idx, callback, param);
+}
+
+/* ProAudio: master gain of each mix (bus) and of the monitoring (headphones)
+ * device.  The frontend sets them, the audio thread reads them, so they are
+ * kept as atomically readable integers. */
+
+void obs_audio_set_bus_volume(size_t bus, float volume)
+{
+	struct calldata data;
+	uint8_t stack[128];
+	long milli;
+
+	if (!obs || bus >= MAX_AUDIO_MIXES)
+		return;
+
+	if (volume < 0.0f)
+		volume = 0.0f;
+
+	milli = lroundf(volume * 1000.0f);
+	if (os_atomic_load_long(&obs->audio.bus_volume_milli[bus]) == milli)
+		return;
+
+	calldata_init_fixed(&data, stack, sizeof(stack));
+	calldata_set_int(&data, "bus", (long long)bus);
+	calldata_set_float(&data, "volume", volume);
+
+	signal_handler_signal(obs->signals, "bus_volume", &data);
+
+	volume = (float)calldata_float(&data, "volume");
+	if (volume < 0.0f)
+		volume = 0.0f;
+
+	os_atomic_set_long(&obs->audio.bus_volume_milli[bus], lroundf(volume * 1000.0f));
+}
+
+float obs_audio_get_bus_volume(size_t bus)
+{
+	if (!obs || bus >= MAX_AUDIO_MIXES)
+		return 1.0f;
+
+	return (float)os_atomic_load_long(&obs->audio.bus_volume_milli[bus]) / 1000.0f;
+}
+
+void obs_audio_set_monitoring_volume(float volume)
+{
+	struct calldata data;
+	uint8_t stack[128];
+	long milli;
+
+	if (!obs)
+		return;
+
+	if (volume < 0.0f)
+		volume = 0.0f;
+
+	milli = lroundf(volume * 1000.0f);
+	if (os_atomic_load_long(&obs->audio.monitoring_volume_milli) == milli)
+		return;
+
+	calldata_init_fixed(&data, stack, sizeof(stack));
+	calldata_set_float(&data, "volume", volume);
+
+	signal_handler_signal(obs->signals, "monitoring_volume", &data);
+
+	volume = (float)calldata_float(&data, "volume");
+	if (volume < 0.0f)
+		volume = 0.0f;
+
+	os_atomic_set_long(&obs->audio.monitoring_volume_milli, lroundf(volume * 1000.0f));
+}
+
+float obs_audio_get_monitoring_volume(void)
+{
+	if (!obs)
+		return 1.0f;
+
+	return (float)os_atomic_load_long(&obs->audio.monitoring_volume_milli) / 1000.0f;
 }
 
 void obs_apply_private_data(obs_data_t *settings)

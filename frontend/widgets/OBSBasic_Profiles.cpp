@@ -17,6 +17,8 @@
 
 #include "OBSBasic.hpp"
 
+#include <components/ProAudioBusOutputs.hpp>
+
 #ifdef YOUTUBE_ENABLED
 #include <docks/YouTubeAppDock.hpp>
 #endif
@@ -757,6 +759,10 @@ void OBSBasic::ResetProfileData()
 
 		blog(LOG_INFO, "Audio monitoring device:\n\tname: %s\n\tid: %s", device_name, device_id);
 	}
+
+	/* ProAudio: the bus outputs belong to the profile, so switching profiles
+	 * has to reopen them with the new routing. */
+	proAudioLoadBusOutputs();
 }
 
 std::vector<std::string> OBSBasic::GetRestartRequirements(const ConfigFile &config) const

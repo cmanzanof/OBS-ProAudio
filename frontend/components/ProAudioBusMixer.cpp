@@ -18,12 +18,14 @@
 #include "ProAudioBusMixer.hpp"
 
 #include "ProAudioBusMeter.hpp"
+#include "ProAudioBusOutputs.hpp"
 #include "ProAudioBuses.hpp"
 
 #include <widgets/OBSBasic.hpp>
 
 #include <qt-wrappers.hpp>
 
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFrame>
 #include <QGridLayout>
@@ -47,6 +49,17 @@ ProAudioBusMixer::ProAudioBusMixer(QWidget *parent) : QDialog(parent)
 	grid->setHorizontalSpacing(12);
 	grid->setColumnStretch(1, 1);
 
+	/* ProAudio: the engines that can play a bus on a device also show which
+	 * device it is; the rest of the platforms only show the faders. */
+	const bool deviceOutputs = proAudioBusOutputsAvailable();
+
+	if (deviceOutputs) {
+		QLabel *outputHeader = new QLabel(QTStr("Basic.ProAudio.BusOutput"), this);
+		outputHeader->setToolTip(QTStr("Basic.ProAudio.BusOutput.Tooltip.Header"));
+		grid->addWidget(outputHeader, 0, 4);
+		setMinimumWidth(720);
+	}
+
 	for (size_t bus = 0; bus < MAX_AUDIO_MIXES; bus++) {
 		float volume = obs_audio_get_bus_volume(bus);
 
@@ -65,6 +78,11 @@ ProAudioBusMixer::ProAudioBusMixer(QWidget *parent) : QDialog(parent)
 			[bus](int deflection) { obs_audio_set_bus_volume(bus, proAudioFaderToVolume(deflection)); });
 
 		sliders[bus] = slider;
+
+		/* The master mix is what recording and streaming use, so, like in
+		 * vMix, it is not routed to a device. */
+		if (deviceOutputs && bus > 0)
+			addDeviceCombo(grid, (int)bus, bus, busName);
 	}
 
 	/* Separate the buses from the headphones, which is not a bus: it is the
@@ -72,7 +90,7 @@ ProAudioBusMixer::ProAudioBusMixer(QWidget *parent) : QDialog(parent)
 	QFrame *line = new QFrame(this);
 	line->setFrameShape(QFrame::HLine);
 	line->setFrameShadow(QFrame::Sunken);
-	grid->addWidget(line, (int)MAX_AUDIO_MIXES, 0, 1, 4);
+	grid->addWidget(line, (int)MAX_AUDIO_MIXES, 0, 1, deviceOutputs ? 5 : 4);
 
 	initialMonitorVolume = obs_audio_get_monitoring_volume();
 	monitorSlider = addFaderRow(grid, (int)MAX_AUDIO_MIXES + 1, QTStr("Basic.ProAudio.BusMixer.Headphones"),
@@ -120,6 +138,24 @@ QSlider *ProAudioBusMixer::addFaderRow(QGridLayout *grid, int row, const QString
 	grid->addWidget(value, row, 3);
 
 	return slider;
+}
+
+void ProAudioBusMixer::addDeviceCombo(QGridLayout *grid, int row, size_t bus, const QString &busName)
+{
+	QComboBox *combo = new QComboBox(this);
+
+	proAudioFillBusOutputCombo(combo, bus);
+
+	combo->setToolTip(QTStr("Basic.ProAudio.BusOutput.Tooltip").arg(busName));
+	combo->setAccessibleName(QTStr("Basic.ProAudio.BusOutputTooltip").arg(busName));
+	combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	combo->setMinimumContentsLength(16);
+
+	connect(combo, &QComboBox::currentIndexChanged, this, [bus, combo](int) {
+		proAudioApplyBusOutput(bus, combo->currentData().toString(), combo->currentText());
+	});
+
+	grid->addWidget(combo, row, 4);
 }
 
 void ProAudioBusMixer::resetVolumes()

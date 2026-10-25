@@ -48,5 +48,6 @@ private:
 
 	QSlider *addFaderRow(QGridLayout *grid, int row, const QString &label, const QString &tooltip, float volume,
 			     QWidget *meter);
+	void addDeviceCombo(QGridLayout *grid, int row, size_t bus, const QString &busName);
 	void resetVolumes();
 };

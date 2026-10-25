@@ -30,6 +30,7 @@
 #ifdef YOUTUBE_ENABLED
 #include <docks/YouTubeAppDock.hpp>
 #endif
+#include <components/ProAudioBusOutputs.hpp>
 #include <dialogs/NameDialog.hpp>
 #include <dialogs/OBSAbout.hpp>
 #include <dialogs/OBSBasicAdvAudio.hpp>
@@ -1025,6 +1026,9 @@ void OBSBasic::OBSInit()
 
 		blog(LOG_INFO, "Audio monitoring device:\n\tname: %s\n\tid: %s", device_name, device_id);
 	}
+
+	/* ProAudio: reopen the bus outputs with the routing saved in the profile */
+	proAudioLoadBusOutputs();
 
 	InitOBSCallbacks();
 	InitHotkeys();

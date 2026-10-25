@@ -63,6 +63,8 @@ target_sources(
     components/ProAudioBusMeter.hpp
     components/ProAudioBusMixer.cpp
     components/ProAudioBusMixer.hpp
+    components/ProAudioBusOutputs.cpp
+    components/ProAudioBusOutputs.hpp
     components/ProAudioBusSends.cpp
     components/ProAudioBusSends.hpp
     components/ProAudioBuses.hpp

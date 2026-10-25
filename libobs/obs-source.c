@@ -98,6 +98,7 @@ static const char *source_signals[] = {
 	"void audio_monitoring(ptr source, int type)",
 	"void bus_send(ptr source, int bus, in out float volume)",
 	"void solo_mode(ptr source, in out int mode)",
+	"void afv(ptr source, bool enabled)",
 	"void audio_activate(ptr source)",
 	"void audio_deactivate(ptr source)",
 	"void filter_add(ptr source, ptr filter)",
@@ -260,8 +261,10 @@ static bool obs_source_init(struct obs_source *source)
 
 	source->deinterlace_top_first = true;
 	source->audio_mixers = 0xFF;
-	for (size_t mix = 0; mix < MAX_AUDIO_MIXES; mix++)
+	for (size_t mix = 0; mix < MAX_AUDIO_MIXES; mix++) {
 		source->bus_send[mix] = 1.0f;
+		source->afv_gain[mix] = 1.0f;
+	}
 	source->solo_mode = OBS_SOLO_MODE_OFF;
 
 	source->private_settings = obs_data_create();
@@ -669,6 +672,8 @@ obs_source_t *obs_source_duplicate(obs_source_t *source, const char *new_name, b
 
 	new_source->audio_mixers = source->audio_mixers;
 	memcpy(new_source->bus_send, source->bus_send, sizeof(new_source->bus_send));
+	new_source->afv_enabled = source->afv_enabled;
+	memcpy(new_source->afv_gain, source->afv_gain, sizeof(new_source->afv_gain));
 	new_source->sync_offset = source->sync_offset;
 	new_source->user_volume = source->user_volume;
 	new_source->user_muted = source->user_muted;
@@ -4900,6 +4905,41 @@ float obs_source_get_bus_send(const obs_source_t *source, size_t bus)
 	return source->bus_send[bus];
 }
 
+void obs_source_set_afv(obs_source_t *source, bool enabled)
+{
+	struct calldata data;
+	uint8_t stack[128];
+
+	if (!obs_source_valid(source, "obs_source_set_afv"))
+		return;
+	if (!source->owns_info_id && (source->info.output_flags & OBS_SOURCE_AUDIO) == 0)
+		return;
+
+	if (source->afv_enabled == enabled)
+		return;
+
+	calldata_init_fixed(&data, stack, sizeof(stack));
+	calldata_set_ptr(&data, "source", source);
+	calldata_set_bool(&data, "enabled", enabled);
+
+	signal_handler_signal(source->context.signals, "afv", &data);
+
+	/* The signal is informational: the flag itself is not modified by the
+	 * handlers, so the audio thread always sees a plain boolean.  The gain
+	 * is ramped by the audio thread on the next block. */
+	source->afv_enabled = enabled;
+}
+
+bool obs_source_get_afv(const obs_source_t *source)
+{
+	if (!obs_source_valid(source, "obs_source_get_afv"))
+		return false;
+	if (!source->owns_info_id && (source->info.output_flags & OBS_SOURCE_AUDIO) == 0)
+		return false;
+
+	return source->afv_enabled;
+}
+
 /* ProAudio: creates or destroys the monitoring device stream of a source.
  * A source is monitored when it asks for it through its monitoring type, or
  * while it is soloed: solo is a headphone preview that has to work for any
@@ -5375,6 +5415,48 @@ static inline void multiply_vol_data(obs_source_t *source, size_t mix, size_t ch
 	}
 }
 
+/* ProAudio: ramps the audio follow video gain of one mix from its current
+ * value to the target.  One audio block is enough to avoid clicks when a
+ * transition starts or ends. */
+static inline void ramp_afv_audio(obs_source_t *source, size_t mix, size_t channels, float to)
+{
+	const float from = source->afv_gain[mix];
+	const float step = (to - from) / (float)AUDIO_OUTPUT_FRAMES;
+
+	for (size_t ch = 0; ch < channels; ch++) {
+		register float *out = source->audio_output_buf[mix][ch];
+		register float gain = from;
+
+		for (size_t i = 0; i < AUDIO_OUTPUT_FRAMES; i++) {
+			out[i] *= gain;
+			gain += step;
+		}
+	}
+
+	source->afv_gain[mix] = to;
+}
+
+/* ProAudio: audio follow video.  A source with AFV enabled is only audible
+ * while it takes part in the program output, so it fades out when it leaves
+ * the program scene (or is hidden) and back in when it returns.  The check
+ * uses the activation references, which the frontend only increments for the
+ * program output: sources shown in the preview, in a projector or in the
+ * multiview are just "showing" and stay gated. */
+static void apply_afv_gain(obs_source_t *source, uint32_t mixers, size_t channels)
+{
+	const float target = (!source->afv_enabled || obs_source_active(source)) ? 1.0f : 0.0f;
+
+	for (size_t mix = 0; mix < MAX_AUDIO_MIXES; mix++) {
+		uint32_t mix_bit = 1 << mix;
+
+		if ((source->audio_mixers & mix_bit) == 0 || (mixers & mix_bit) == 0)
+			continue;
+
+		if (source->afv_gain[mix] != target)
+			ramp_afv_audio(source, mix, channels, target);
+	}
+}
+
 static inline void apply_audio_action(obs_source_t *source, const struct audio_action *action)
 {
 	switch (action->type) {
@@ -5393,7 +5475,7 @@ static inline void apply_audio_action(obs_source_t *source, const struct audio_a
 	}
 }
 
-static void apply_audio_actions(obs_source_t *source, size_t channels, size_t sample_rate)
+static void apply_audio_actions(obs_source_t *source, uint32_t mixers, size_t channels, size_t sample_rate)
 {
 	float vol_data[AUDIO_OUTPUT_FRAMES];
 	float cur_vol = get_source_volume(source, source->audio_ts);
@@ -5440,6 +5522,8 @@ static void apply_audio_actions(obs_source_t *source, size_t channels, size_t sa
 		if (source->bus_send[mix] != 1.0f)
 			multiply_output_audio(source, mix, channels, source->bus_send[mix]);
 	}
+
+	apply_afv_gain(source, mixers, channels);
 }
 
 static void apply_audio_volume(obs_source_t *source, uint32_t mixers, size_t channels, size_t sample_rate)
@@ -5460,7 +5544,7 @@ static void apply_audio_volume(obs_source_t *source, uint32_t mixers, size_t cha
 		uint64_t duration = conv_frames_to_time(sample_rate, AUDIO_OUTPUT_FRAMES);
 
 		if (action.timestamp < (source->audio_ts + duration)) {
-			apply_audio_actions(source, channels, sample_rate);
+			apply_audio_actions(source, mixers, channels, sample_rate);
 			return;
 		}
 	}
@@ -5481,6 +5565,8 @@ static void apply_audio_volume(obs_source_t *source, uint32_t mixers, size_t cha
 		if (gain != 1.0f)
 			multiply_output_audio(source, mix, channels, gain);
 	}
+
+	apply_afv_gain(source, mixers, channels);
 }
 
 static void custom_audio_render(obs_source_t *source, uint32_t mixers, size_t channels, size_t sample_rate)

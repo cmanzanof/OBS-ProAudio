@@ -1232,6 +1232,22 @@ General Source Functions
 
 ---------------------
 
+.. function:: void obs_source_set_afv(obs_source_t *source, bool enabled)
+              bool obs_source_get_afv(const obs_source_t *source)
+
+   Enables/disables audio follow video for a source, and reports whether it is
+   enabled.
+
+   While it is enabled the source is gated to silence whenever it is not part
+   of the program output, and faded back in when it returns, which is the
+   "automatically mix audio" behavior of a video switcher.  Only the
+   activation of the program output counts: a source visible in the preview,
+   a projector or the multiview is still gated.  The gate is applied to every
+   mix at once and does not modify the volume, the mute state or the bus
+   sends of the source, so disabling it restores the previous mix.
+
+---------------------
+
 .. function:: void obs_source_set_monitoring_type(obs_source_t *source, enum obs_monitoring_type type)
               enum obs_monitoring_type obs_source_get_monitoring_type(obs_source_t *source)
 

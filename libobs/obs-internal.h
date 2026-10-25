@@ -894,6 +894,13 @@ struct obs_source {
 	 * effective send gain for those mixes is 0 regardless of this value.
 	 * 1.0 behaves exactly like the pre-bus code path. */
 	float bus_send[MAX_AUDIO_MIXES];
+	/* ProAudio: audio follow video.  While enabled, the source is gated to
+	 * silence whenever it is not part of the program output, like the
+	 * "automatically mix audio" option of a video switcher.  The gain is
+	 * kept per mix (and already ramped) so that a later version can follow
+	 * the video per bus instead of on every bus at once. */
+	bool afv_enabled;
+	float afv_gain[MAX_AUDIO_MIXES];
 	/* ProAudio: solo (headphone preview) mode of the source.  Solo only
 	 * ever changes what the monitoring device plays, never the mixes. */
 	enum obs_source_solo_mode solo_mode;

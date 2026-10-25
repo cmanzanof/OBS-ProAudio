@@ -1277,6 +1277,29 @@ EXPORT void obs_source_set_bus_send(obs_source_t *source, size_t bus, float volu
 EXPORT float obs_source_get_bus_send(const obs_source_t *source, size_t bus);
 
 /**
+ * Enables or disables audio follow video for a source.
+ *
+ * While it is enabled, the source is only audible when it is part of the
+ * program output, and it is faded out when it leaves it (because it was
+ * removed from the program scene, hidden, or the program changed to another
+ * scene).  This is the "automatically mix audio" behavior of a video
+ * switcher: it gates the source for every mix at once, without touching its
+ * fader, its mute state or its bus sends, so disabling it restores the
+ * previous mix.
+ *
+ * The gating follows the program output only: a source that is merely
+ * visible in the preview, in a projector or in the multiview keeps being
+ * gated, which is what makes the feature safe to use in studio mode.
+ *
+ * @param source   Source to change
+ * @param enabled  true to follow the program output, false to always play
+ */
+EXPORT void obs_source_set_afv(obs_source_t *source, bool enabled);
+
+/** Returns true when audio follow video is enabled for the source. */
+EXPORT bool obs_source_get_afv(const obs_source_t *source);
+
+/**
  * Increments the 'showing' reference counter to indicate that the source is
  * being shown somewhere.  If the reference counter was 0, will call the 'show'
  * callback.

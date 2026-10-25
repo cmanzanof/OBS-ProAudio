@@ -2389,6 +2389,11 @@ static obs_source_t *obs_load_source_type(obs_data_t *source_data, bool is_priva
 		obs_data_array_release(bus_sends);
 	}
 
+	/* ProAudio: audio follow video.  Upstream scene collections do not
+	 * have the key, which means the source always plays. */
+	if (obs_data_get_bool(source_data, "afv"))
+		obs_source_set_afv(source, true);
+
 	obs_data_release(source->private_settings);
 	source->private_settings = obs_data_get_obj(source_data, "private_settings");
 	if (!source->private_settings)
@@ -2555,6 +2560,11 @@ obs_data_t *obs_save_source(obs_source_t *source)
 			obs_data_array_release(bus_sends);
 		}
 	}
+
+	/* ProAudio: audio follow video.  Same policy as the bus sends: only
+	 * written when enabled, and ignored by stock OBS. */
+	if (obs_source_get_afv(source))
+		obs_data_set_bool(source_data, "afv", true);
 
 	if (canvas) {
 		obs_data_set_string(source_data, "canvas_uuid", obs_canvas_get_uuid(canvas));

@@ -213,7 +213,20 @@ EXPORT void obs_volmeter_destroy(obs_volmeter_t *volmeter);
 EXPORT bool obs_volmeter_attach_source(obs_volmeter_t *volmeter, obs_source_t *source);
 
 /**
- * @brief Detach the volume meter from the currently attached source
+ * @brief Attach the volume meter to an audio mixer (bus)
+ * @param volmeter pointer to the volume meter object
+ * @param bus index of the audio mixer, 0 being the master mix
+ * @return true on success
+ *
+ * ProAudio: when the volume meter is attached to a bus it reports the level of
+ * that mix as it is sent to its outputs, that is, after the per source volume,
+ * the per bus sends and the bus fader.  Attaching a source or a bus detaches
+ * the previous one.
+ */
+EXPORT bool obs_volmeter_attach_bus(obs_volmeter_t *volmeter, size_t bus);
+
+/**
+ * @brief Detach the volume meter from the currently attached source or bus
  * @param volmeter pointer to the volume meter object
  */
 EXPORT void obs_volmeter_detach_source(obs_volmeter_t *volmeter);

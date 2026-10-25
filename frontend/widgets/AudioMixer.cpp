@@ -676,8 +676,19 @@ void AudioMixer::clearAllSolos()
 
 void AudioMixer::showBusMixer()
 {
-	ProAudioBusMixer dialog(this);
-	dialog.exec();
+	/* The dialog stays open while the user mixes, so it is created once and
+	 * only raised on subsequent clicks. */
+	ProAudioBusMixer *dialog = findChild<ProAudioBusMixer *>(QString(), Qt::FindDirectChildrenOnly);
+
+	if (dialog) {
+		dialog->raise();
+		dialog->activateWindow();
+		return;
+	}
+
+	dialog = new ProAudioBusMixer(this);
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->show();
 }
 
 void AudioMixer::updateVolumeLayouts()

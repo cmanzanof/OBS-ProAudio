@@ -59,6 +59,8 @@ target_sources(
     components/OBSAdvAudioCtrl.hpp
     components/OBSPreviewScalingComboBox.cpp
     components/OBSPreviewScalingComboBox.hpp
+    components/ProAudioBusMeter.cpp
+    components/ProAudioBusMeter.hpp
     components/ProAudioBusMixer.cpp
     components/ProAudioBusMixer.hpp
     components/ProAudioBusSends.cpp

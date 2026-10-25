@@ -26,6 +26,7 @@
 
 class QGridLayout;
 class QSlider;
+class QWidget;
 
 /* ProAudio: the "outputs" section of a vMix style mixer, i.e. the master gain
  * of every bus plus the volume of the headphones.  Both live in the engine, so
@@ -45,6 +46,7 @@ private:
 	std::array<QSlider *, MAX_AUDIO_MIXES> sliders{};
 	QSlider *monitorSlider = nullptr;
 
-	QSlider *addFaderRow(QGridLayout *grid, int row, const QString &label, const QString &tooltip, float volume);
+	QSlider *addFaderRow(QGridLayout *grid, int row, const QString &label, const QString &tooltip, float volume,
+			     QWidget *meter);
 	void resetVolumes();
 };

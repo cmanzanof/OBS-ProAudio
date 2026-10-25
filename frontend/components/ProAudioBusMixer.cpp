@@ -17,6 +17,7 @@
 
 #include "ProAudioBusMixer.hpp"
 
+#include "ProAudioBusMeter.hpp"
 #include "ProAudioBuses.hpp"
 
 #include <widgets/OBSBasic.hpp>
@@ -53,7 +54,12 @@ ProAudioBusMixer::ProAudioBusMixer(QWidget *parent) : QDialog(parent)
 
 		/* The bus fader is already post source faders and post sends, so
 		 * moving it does not disturb how the sources are mixed. */
-		QSlider *slider = addFaderRow(grid, (int)bus, proAudioBusShortName(bus), proAudioBusName(bus), volume);
+		ProAudioBusMeter *meter = new ProAudioBusMeter(bus, this);
+		QString busName = proAudioBusName(bus);
+
+		meter->setToolTip(QTStr("Basic.ProAudio.BusMixer.MeterTooltip").arg(busName));
+
+		QSlider *slider = addFaderRow(grid, (int)bus, proAudioBusShortName(bus), busName, volume, meter);
 
 		connect(slider, &QSlider::valueChanged, this,
 			[bus](int deflection) { obs_audio_set_bus_volume(bus, proAudioFaderToVolume(deflection)); });
@@ -61,25 +67,21 @@ ProAudioBusMixer::ProAudioBusMixer(QWidget *parent) : QDialog(parent)
 		sliders[bus] = slider;
 	}
 
-	mainLayout->addLayout(grid);
-
+	/* Separate the buses from the headphones, which is not a bus: it is the
+	 * monitoring device. */
 	QFrame *line = new QFrame(this);
 	line->setFrameShape(QFrame::HLine);
 	line->setFrameShadow(QFrame::Sunken);
-	mainLayout->addWidget(line);
-
-	QGridLayout *monitorGrid = new QGridLayout();
-	monitorGrid->setHorizontalSpacing(12);
-	monitorGrid->setColumnStretch(1, 1);
+	grid->addWidget(line, (int)MAX_AUDIO_MIXES, 0, 1, 4);
 
 	initialMonitorVolume = obs_audio_get_monitoring_volume();
-	monitorSlider = addFaderRow(monitorGrid, 0, QTStr("Basic.ProAudio.BusMixer.Headphones"),
-				    QTStr("Basic.ProAudio.BusMixer.HeadphonesTooltip"), initialMonitorVolume);
+	monitorSlider = addFaderRow(grid, (int)MAX_AUDIO_MIXES + 1, QTStr("Basic.ProAudio.BusMixer.Headphones"),
+				    QTStr("Basic.ProAudio.BusMixer.HeadphonesTooltip"), initialMonitorVolume, nullptr);
 
 	connect(monitorSlider, &QSlider::valueChanged, this,
 		[](int deflection) { obs_audio_set_monitoring_volume(proAudioFaderToVolume(deflection)); });
 
-	mainLayout->addLayout(monitorGrid);
+	mainLayout->addLayout(grid);
 
 	QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
 	QPushButton *resetButton = buttons->addButton(QTStr("Basic.ProAudio.BusMixer.Reset"),
@@ -92,7 +94,7 @@ ProAudioBusMixer::ProAudioBusMixer(QWidget *parent) : QDialog(parent)
 }
 
 QSlider *ProAudioBusMixer::addFaderRow(QGridLayout *grid, int row, const QString &label, const QString &tooltip,
-				       float volume)
+				       float volume, QWidget *meter)
 {
 	QLabel *name = new QLabel(label, this);
 	name->setToolTip(tooltip);
@@ -113,7 +115,9 @@ QSlider *ProAudioBusMixer::addFaderRow(QGridLayout *grid, int row, const QString
 
 	grid->addWidget(name, row, 0);
 	grid->addWidget(slider, row, 1);
-	grid->addWidget(value, row, 2);
+	if (meter)
+		grid->addWidget(meter, row, 2);
+	grid->addWidget(value, row, 3);
 
 	return slider;
 }

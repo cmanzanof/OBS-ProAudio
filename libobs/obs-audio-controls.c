@@ -64,6 +64,9 @@ struct meter_cb {
 struct obs_volmeter {
 	pthread_mutex_t mutex;
 	obs_source_t *source;
+	/* ProAudio: bus (mix) this volmeter is attached to, or SIZE_MAX when it
+	 * is attached to a source instead. */
+	size_t bus;
 	enum obs_fader_type type;
 	float cur_db;
 
@@ -518,6 +521,33 @@ static void volmeter_source_data_received(void *vptr, obs_source_t *source, cons
 	signal_levels_updated(volmeter, magnitude, peak, input_peak);
 }
 
+/* ProAudio: meters a bus (mix) instead of a source.  The mix already carries
+ * the per source volume, the bus sends and the bus fader, so the data is
+ * metered as is, without applying any further gain. */
+static void volmeter_bus_data_received(void *vptr, size_t mix_idx, struct audio_data *data)
+{
+	struct obs_volmeter *volmeter = (struct obs_volmeter *)vptr;
+	float magnitude[MAX_AUDIO_CHANNELS];
+	float peak[MAX_AUDIO_CHANNELS];
+	float input_peak[MAX_AUDIO_CHANNELS];
+
+	UNUSED_PARAMETER(mix_idx);
+
+	pthread_mutex_lock(&volmeter->mutex);
+
+	volmeter_process_audio_data(volmeter, data);
+
+	for (int channel_nr = 0; channel_nr < MAX_AUDIO_CHANNELS; channel_nr++) {
+		magnitude[channel_nr] = mul_to_db(volmeter->magnitude[channel_nr]);
+		peak[channel_nr] = mul_to_db(volmeter->peak[channel_nr]);
+		input_peak[channel_nr] = peak[channel_nr];
+	}
+
+	pthread_mutex_unlock(&volmeter->mutex);
+
+	signal_levels_updated(volmeter, magnitude, peak, input_peak);
+}
+
 obs_fader_t *obs_fader_create(enum obs_fader_type type)
 {
 	struct obs_fader *fader = bzalloc(sizeof(struct obs_fader));
@@ -734,6 +764,8 @@ obs_volmeter_t *obs_volmeter_create(enum obs_fader_type type)
 	if (!volmeter)
 		return NULL;
 
+	volmeter->bus = SIZE_MAX;
+
 	pthread_mutex_init_value(&volmeter->mutex);
 	pthread_mutex_init_value(&volmeter->callback_mutex);
 	if (pthread_mutex_init(&volmeter->mutex, NULL) != 0)
@@ -788,18 +820,43 @@ bool obs_volmeter_attach_source(obs_volmeter_t *volmeter, obs_source_t *source)
 	return true;
 }
 
+/* ProAudio: meter a bus instead of a source.  The callback is the same raw mix
+ * that feeds the bus outputs, and it is registered through the same audio
+ * callback list that raw audio outputs use. */
+bool obs_volmeter_attach_bus(obs_volmeter_t *volmeter, size_t bus)
+{
+	if (!volmeter || bus >= MAX_AUDIO_MIXES)
+		return false;
+
+	obs_volmeter_detach_source(volmeter);
+
+	obs_add_raw_audio_callback(bus, NULL, volmeter_bus_data_received, volmeter);
+
+	pthread_mutex_lock(&volmeter->mutex);
+	volmeter->bus = bus;
+	pthread_mutex_unlock(&volmeter->mutex);
+
+	return true;
+}
+
 void obs_volmeter_detach_source(obs_volmeter_t *volmeter)
 {
 	signal_handler_t *sh;
 	obs_source_t *source;
+	size_t bus;
 
 	if (!volmeter)
 		return;
 
 	pthread_mutex_lock(&volmeter->mutex);
 	source = volmeter->source;
+	bus = volmeter->bus;
 	volmeter->source = NULL;
+	volmeter->bus = SIZE_MAX;
 	pthread_mutex_unlock(&volmeter->mutex);
+
+	if (bus != SIZE_MAX)
+		obs_remove_raw_audio_callback(bus, volmeter_bus_data_received, volmeter);
 
 	if (!source)
 		return;
@@ -834,6 +891,11 @@ int obs_volmeter_get_nr_channels(obs_volmeter_t *volmeter)
 	} else {
 		obs_nr_audio_channels = 2;
 	}
+
+	/* ProAudio: a meter attached to a bus always has the channels of the
+	 * audio output, because a bus is a mix and not a source. */
+	if (volmeter->bus != SIZE_MAX)
+		return obs_nr_audio_channels;
 
 	return CLAMP(source_nr_audio_channels, 0, obs_nr_audio_channels);
 }

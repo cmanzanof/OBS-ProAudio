@@ -82,7 +82,7 @@ las dos que agrega el fork.
 Hoja de ruta
 ------------
 
-1. **F1 - Motor de buses** (casi completo)
+1. **F1 - Motor de buses** (completo)
 
    1. ✔ ``MAX_AUDIO_MIXES`` 6 -> 8.
    2. ✔ Ganancia y mute por fuente y por bus (sends post-fader). Las rampas por bus quedan para
@@ -90,7 +90,9 @@ Hoja de ruta
    3. ✔ Solo AFL/PFL no destructivo en la salida de monitoreo (auriculares), con volumen de
       auriculares propio.
    4. ✔ Medidores peak/RMS por bus.
-   5. Pendiente: delay por entrada en milisegundos.
+   5. ✔ Delay por entrada: lo cubre upstream con el "Desplazamiento de sincronización (ms)" por
+      fuente (``obs_source_set_sync_offset()``), que retrasa el audio de esa entrada sin tocar
+      las demás. El fork lo deja con el nombre de OBS en vez de renombrarlo a "Delay".
 
 2. **F2 - UI del mezclador** (completa para el MVP)
 
@@ -101,8 +103,12 @@ Hoja de ruta
    3. ✔ Envíos por bus con faders, faders por bus, volumen de auriculares y medidores por bus.
       Pendiente: los faders de bus viven en una ventana propia; falta integrarlos como una franja
       fija arriba del mezclador, al estilo de la sección "Outputs" de vMix.
-3. **F3 - Salidas y automatismos**: hasta 8 salidas a dispositivos, Audio Follow Video (AFV) y
-   mix-minus.
+3. **F3 - Salidas y automatismos** (en curso)
+
+   1. ✔ Audio Follow Video (AFV) por entrada: la fuente solo suena mientras forma parte de la
+      salida al aire, sin tocar su fader, su mute ni sus envíos.
+   2. Pendiente: mix-minus.
+   3. Pendiente: hasta 8 salidas a dispositivos (una por bus), con el bus Master incluido.
 4. **F4 - Plugins**: host VST3 y matriz de canales.
 
 Registro de cambios propios
@@ -155,6 +161,18 @@ Registro de cambios propios
   en lugar de a una fuente, usando el mismo mix que alimenta sus salidas (o sea, mide después del
   volumen de cada fuente, de los envíos y del fader del bus). ``frontend``: la ventana de buses
   muestra un medidor compacto por bus, con RMS, pico y retención de pico.
+* **F3.1**: ``libobs``: **Audio Follow Video** por entrada
+  (``obs_source_set_afv()`` / ``obs_source_get_afv()``, señal ``afv``). Mientras está activo, la
+  fuente solo suena cuando forma parte de la salida al aire: se desvanece al salir del programa
+  (oculta, fuera de la escena o cambio de escena) y vuelve al regresar, con una rampa de un bloque
+  de audio para no chasquear. La compuerta se aplica a todas las mezclas a la vez, después del
+  volumen y de los envíos, sin modificarlos: apagarla restaura la mezcla anterior y nunca ensucia
+  el estado del mezclador. Solo cuenta la activación del programa, así que una fuente visible en
+  el preview, en un proyector o en el multiview sigue en silencio, que es lo que hace la función
+  usable en modo estudio. Se guarda con la fuente (clave ``afv``). ``frontend``: botón **F** en
+  cada tira del mezclador, entrada en su menú contextual y columna "Follow" en las Propiedades de
+  Audio avanzadas, todas con deshacer; el botón queda deshabilitado en los dispositivos de audio
+  globales, que no pertenecen a ninguna escena.
 * **CI**: primer arranque del workflow del fork. Se publican los tags de upstream en ``origin``
   (sin ellos ``versionconfig.cmake`` rompe el configure), el job de macOS pasa a ``macos-26`` con
   Xcode 26.5, el de Windows a ``windows-2025-vs2026`` y Ubuntu compila contra 24.04 y 26.04. Los

@@ -43,6 +43,8 @@ private:
 	QPointer<QSpinBox> syncOffset;
 	QPointer<QComboBox> monitoringType;
 	QPointer<QComboBox> soloMode;
+	/* ProAudio: audio follow video toggle */
+	QPointer<QCheckBox> afv;
 	/* ProAudio: one checkbox per mixer, i.e. master (M) and buses A..G */
 	std::vector<QPointer<QCheckBox>> mixerChecks;
 	/* ProAudio: opens the per bus send levels dialog */
@@ -57,6 +59,7 @@ private:
 	static void OBSSourceSyncChanged(void *param, calldata_t *calldata);
 	static void OBSSourceMonitoringTypeChanged(void *param, calldata_t *calldata);
 	static void OBSSourceSoloModeChanged(void *param, calldata_t *calldata);
+	static void OBSSourceAfvChanged(void *param, calldata_t *calldata);
 	static void OBSSourceMixersChanged(void *param, calldata_t *calldata);
 	static void OBSSourceBalanceChanged(void *param, calldata_t *calldata);
 	static void OBSSourceRenamed(void *param, calldata_t *calldata);
@@ -78,6 +81,7 @@ public slots:
 	void SourceSyncChanged(int64_t offset);
 	void SourceMonitoringTypeChanged(int type);
 	void SourceSoloModeChanged(int mode);
+	void SourceAfvChanged(bool enabled);
 	void SourceMixersChanged(uint32_t mixers);
 	void SourceBalanceChanged(int balance);
 	void SetSourceName(QString newName);
@@ -89,5 +93,6 @@ public slots:
 	void syncOffsetChanged(int milliseconds);
 	void monitoringTypeChanged(int index);
 	void soloModeChanged(int index);
+	void afvChanged(bool checked);
 	void ResetBalance();
 };

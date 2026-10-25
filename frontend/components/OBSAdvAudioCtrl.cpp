@@ -49,6 +49,7 @@ OBSAdvAudioCtrl::OBSAdvAudioCtrl(QGridLayout *, obs_source_t *source_) : source(
 	}
 	syncOffset = new QSpinBox();
 	soloMode = new QComboBox();
+	afv = new QCheckBox();
 
 	sigs.emplace_back(handler, "activate", OBSSourceActivated, this);
 	sigs.emplace_back(handler, "deactivate", OBSSourceDeactivated, this);
@@ -62,6 +63,7 @@ OBSAdvAudioCtrl::OBSAdvAudioCtrl(QGridLayout *, obs_source_t *source_) : source(
 	}
 	sigs.emplace_back(handler, "audio_mixers", OBSSourceMixersChanged, this);
 	sigs.emplace_back(handler, "solo_mode", OBSSourceSoloModeChanged, this);
+	sigs.emplace_back(handler, "afv", OBSSourceAfvChanged, this);
 	sigs.emplace_back(handler, "audio_balance", OBSSourceBalanceChanged, this);
 	sigs.emplace_back(handler, "rename", OBSSourceRenamed, this);
 
@@ -172,6 +174,11 @@ OBSAdvAudioCtrl::OBSAdvAudioCtrl(QGridLayout *, obs_source_t *source_) : source(
 	soloMode->setAccessibleName(QTStr("Basic.ProAudio.SoloSource").arg(sourceName));
 	soloMode->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
 
+	/* ProAudio: audio follow video, the "automatically mix audio" of vMix */
+	afv->setChecked(obs_source_get_afv(source));
+	afv->setToolTip(QTStr("Basic.ProAudio.AfvSource").arg(sourceName));
+	afv->setAccessibleName(QTStr("Basic.ProAudio.AfvSource").arg(sourceName));
+
 	/* ProAudio: one checkbox per mixer (master and buses A..G) */
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; i++) {
 		QCheckBox *mixer = new QCheckBox();
@@ -224,6 +231,7 @@ OBSAdvAudioCtrl::OBSAdvAudioCtrl(QGridLayout *, obs_source_t *source_) : source(
 		connect(monitoringType, &QComboBox::currentIndexChanged, this, &OBSAdvAudioCtrl::monitoringTypeChanged);
 	}
 	connect(soloMode, &QComboBox::currentIndexChanged, this, &OBSAdvAudioCtrl::soloModeChanged);
+	connect(afv, &QCheckBox::clicked, this, &OBSAdvAudioCtrl::afvChanged);
 
 	setObjectName(sourceName);
 }
@@ -241,6 +249,7 @@ OBSAdvAudioCtrl::~OBSAdvAudioCtrl()
 		monitoringType->deleteLater();
 	}
 	soloMode->deleteLater();
+	afv->deleteLater();
 	mixerChecks.clear();
 	mixerContainer->deleteLater();
 }
@@ -266,6 +275,7 @@ void OBSAdvAudioCtrl::ShowAudioControl(QGridLayout *layout)
 	layout->addWidget(soloMode, lastRow, idx++);
 	layout->addWidget(mixerContainer, lastRow, idx++);
 	layout->layout()->setAlignment(mixerContainer, Qt::AlignVCenter);
+	layout->addWidget(afv, lastRow, idx++);
 	layout->setHorizontalSpacing(15);
 }
 
@@ -311,6 +321,12 @@ void OBSAdvAudioCtrl::OBSSourceSoloModeChanged(void *param, calldata_t *calldata
 {
 	int mode = calldata_int(calldata, "mode");
 	QMetaObject::invokeMethod(static_cast<OBSAdvAudioCtrl *>(param), "SourceSoloModeChanged", Q_ARG(int, mode));
+}
+
+void OBSAdvAudioCtrl::OBSSourceAfvChanged(void *param, calldata_t *calldata)
+{
+	bool enabled = calldata_bool(calldata, "enabled");
+	QMetaObject::invokeMethod(static_cast<OBSAdvAudioCtrl *>(param), "SourceAfvChanged", Q_ARG(bool, enabled));
 }
 
 void OBSAdvAudioCtrl::OBSSourceMixersChanged(void *param, calldata_t *calldata)
@@ -399,6 +415,13 @@ void OBSAdvAudioCtrl::SourceSoloModeChanged(int mode)
 	soloMode->blockSignals(true);
 	soloMode->setCurrentIndex(idx);
 	soloMode->blockSignals(false);
+}
+
+void OBSAdvAudioCtrl::SourceAfvChanged(bool enabled)
+{
+	afv->blockSignals(true);
+	afv->setChecked(enabled);
+	afv->blockSignals(false);
 }
 
 void OBSAdvAudioCtrl::SourceMixersChanged(uint32_t mixers)
@@ -604,6 +627,27 @@ void OBSAdvAudioCtrl::soloModeChanged(int index)
 	OBSBasic::Get()->undo_s.add_action(QTStr("Undo.SoloMode.Change").arg(name),
 					   std::bind(undo_redo, std::placeholders::_1, (int)prev),
 					   std::bind(undo_redo, std::placeholders::_1, (int)mode), uuid, uuid);
+}
+
+void OBSAdvAudioCtrl::afvChanged(bool checked)
+{
+	bool prev = obs_source_get_afv(source);
+
+	if (prev == checked)
+		return;
+
+	obs_source_set_afv(source, checked);
+
+	auto undo_redo = [](const std::string &uuid, bool val) {
+		OBSSourceAutoRelease source = obs_get_source_by_uuid(uuid.c_str());
+		obs_source_set_afv(source, val);
+	};
+
+	const char *name = obs_source_get_name(source);
+	const char *uuid = obs_source_get_uuid(source);
+	OBSBasic::Get()->undo_s.add_action(QTStr("Undo.Afv.Change").arg(name),
+					   std::bind(undo_redo, std::placeholders::_1, prev),
+					   std::bind(undo_redo, std::placeholders::_1, checked), uuid, uuid);
 }
 
 static inline void setMixer(obs_source_t *source, const int mixerIdx, const bool checked)

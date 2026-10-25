@@ -85,6 +85,9 @@ private:
 	QPushButton *monitorButton;
 	/* ProAudio: headphone preview (AFL/PFL) toggle */
 	QPushButton *soloButton;
+	/* ProAudio: audio follow video toggle */
+	QPushButton *followButton;
+	bool obsAfv;
 
 	OBSFader obs_fader;
 
@@ -106,6 +109,7 @@ private:
 	static void obsMixersChanged(void *data, calldata_t *);
 	static void obsMonitoringChanged(void *data, calldata_t *);
 	static void obsSoloModeChanged(void *data, calldata_t *);
+	static void obsAfvChanged(void *data, calldata_t *);
 	static void obsSourceActivated(void *data, calldata_t *params);
 	static void obsSourceDeactivated(void *data, calldata_t *params);
 	static void obsSourceDestroy(void *data, calldata_t *params);
@@ -118,6 +122,7 @@ private:
 	void setMuted(bool mute);
 	void setMonitoring(obs_monitoring_type type);
 	void setSoloMode(enum obs_source_solo_mode mode);
+	void setAfv(bool enabled);
 	void showSoloMenu(QPoint pos = QPoint(0, 0));
 	void showBusSends();
 
@@ -133,6 +138,7 @@ private slots:
 	void handleMuteButton(bool checked);
 	void handleMonitorButton(bool checked);
 	void handleSoloButton(bool checked);
+	void handleFollowButton(bool checked);
 	void sliderChanged(int vol);
 	void updateText();
 	void setName(QString name);
@@ -141,6 +147,7 @@ private slots:
 	void onMuteChanged(bool muted);
 	void onMonitoringChanged(int type);
 	void onSoloModeChanged(int mode);
+	void onAfvChanged(bool enabled);
 	void onSourceDestroyed() { deleteLater(); }
 
 signals:
@@ -171,7 +178,7 @@ public:
 	QWidget *firstWidget() const { return qobject_cast<QWidget *>(nameButton); }
 	QWidget *lastWidget() const
 	{
-		return vertical ? qobject_cast<QWidget *>(soloButton) : qobject_cast<QWidget *>(slider);
+		return vertical ? qobject_cast<QWidget *>(followButton) : qobject_cast<QWidget *>(slider);
 	}
 
 	void updateName();

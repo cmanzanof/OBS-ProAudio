@@ -87,6 +87,14 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 	soloButton->setMaximumWidth(24);
 	utils->addClass(soloButton, "btn-solo");
 
+	/* ProAudio: audio follow video.  Like the solo button, it is a small
+	 * letter button so the strip stays narrow. */
+	followButton = new QPushButton(this);
+	followButton->setCheckable(true);
+	followButton->setText("F");
+	followButton->setMaximumWidth(24);
+	utils->addClass(followButton, "btn-follow");
+
 	volumeLabel = new QLabel(this);
 	volumeLabel->setIndent(0);
 	volumeLabel->setObjectName("volLabel");
@@ -101,6 +109,7 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 	utils->applyStateStylingEventFilter(muteButton);
 	utils->applyStateStylingEventFilter(monitorButton);
 	utils->applyStateStylingEventFilter(soloButton);
+	utils->applyStateStylingEventFilter(followButton);
 
 	volumeMeter = new VolumeMeter(this, source);
 
@@ -108,6 +117,7 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 	bool unassigned = isSourceUnassigned(source);
 	obsMonitoringType = obs_source_get_monitoring_type(source);
 	obsSoloMode = obs_source_get_solo_mode(source);
+	obsAfv = obs_source_get_afv(source);
 
 	volumeMeter->setMuted(obsMuted || unassigned);
 
@@ -121,6 +131,7 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "audio_mixers", obsMixersChanged, this);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "audio_monitoring", obsMonitoringChanged, this);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "solo_mode", obsSoloModeChanged, this);
+	obsSignals.emplace_back(obs_source_get_signal_handler(source), "afv", obsAfvChanged, this);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "activate", VolumeControl::obsSourceActivated,
 				this);
 	obsSignals.emplace_back(obs_source_get_signal_handler(source), "deactivate",
@@ -144,6 +155,7 @@ VolumeControl::VolumeControl(obs_source_t *source, QWidget *parent, bool vertica
 	connect(muteButton, &QPushButton::clicked, this, &VolumeControl::handleMuteButton);
 	connect(monitorButton, &QPushButton::clicked, this, &VolumeControl::handleMonitorButton);
 	connect(soloButton, &QPushButton::clicked, this, &VolumeControl::handleSoloButton);
+	connect(followButton, &QPushButton::clicked, this, &VolumeControl::handleFollowButton);
 
 	soloButton->setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(soloButton, &QWidget::customContextMenuRequested, this,
@@ -239,6 +251,14 @@ void VolumeControl::obsSoloModeChanged(void *data, calldata_t *params)
 	QMetaObject::invokeMethod(volControl, "onSoloModeChanged", Qt::QueuedConnection, Q_ARG(int, mode));
 }
 
+void VolumeControl::obsAfvChanged(void *data, calldata_t *params)
+{
+	VolumeControl *volControl = static_cast<VolumeControl *>(data);
+	bool enabled = calldata_bool(params, "enabled");
+
+	QMetaObject::invokeMethod(volControl, "onAfvChanged", Qt::QueuedConnection, Q_ARG(bool, enabled));
+}
+
 void VolumeControl::obsMonitoringChanged(void *data, calldata_t *params)
 {
 	VolumeControl *volControl = static_cast<VolumeControl *>(data);
@@ -315,6 +335,7 @@ void VolumeControl::setLayoutVertical(bool vertical)
 		controlLayout->addWidget(muteButton);
 		controlLayout->addWidget(monitorButton);
 		controlLayout->addWidget(soloButton);
+		controlLayout->addWidget(followButton);
 
 		meterLayout->setContentsMargins(0, 0, 0, 0);
 		meterLayout->setSpacing(0);
@@ -391,6 +412,7 @@ void VolumeControl::setLayoutVertical(bool vertical)
 		buttonLayout->addWidget(muteButton);
 		buttonLayout->addWidget(monitorButton);
 		buttonLayout->addWidget(soloButton);
+		buttonLayout->addWidget(followButton);
 
 		controlLayout->addItem(buttonLayout);
 		controlLayout->addWidget(meterFrame);
@@ -445,6 +467,11 @@ void VolumeControl::showVolumeControlMenu(QPoint pos)
 
 	/* ProAudio: per bus send levels of this source */
 	QAction *busSendsAction = new QAction(QTStr("Basic.ProAudio.BusSends.Button"), popup);
+	/* ProAudio: audio follow video of this source */
+	QAction *afvAction = new QAction(QTStr("Basic.ProAudio.Afv"), popup);
+	afvAction->setCheckable(true);
+	afvAction->setChecked(obs_source_get_afv(source));
+	afvAction->setEnabled(!mixerStatus().has(VolumeControl::MixerStatus::Global));
 
 	QAction *copyFiltersAction = new QAction(QTStr("Copy.Filters"), popup);
 	QAction *pasteFiltersAction = new QAction(QTStr("Paste.Filters"), popup);
@@ -480,6 +507,7 @@ void VolumeControl::showVolumeControlMenu(QPoint pos)
 
 	connect(mixerRenameAction, &QAction::triggered, this, &VolumeControl::renameSource);
 	connect(busSendsAction, &QAction::triggered, this, &VolumeControl::showBusSends);
+	connect(afvAction, &QAction::triggered, this, &VolumeControl::setAfv);
 
 	connect(filtersAction, &QAction::triggered, main, &OBSBasic::actionOpenSourceFilters);
 	connect(propertiesAction, &QAction::triggered, main, &OBSBasic::actionOpenSourceProperties);
@@ -511,6 +539,7 @@ void VolumeControl::showVolumeControlMenu(QPoint pos)
 	popup->addAction(mixerRenameAction);
 	popup->addSeparator();
 	popup->addAction(busSendsAction);
+	popup->addAction(afvAction);
 	popup->addAction(filtersAction);
 	popup->addAction(propertiesAction);
 
@@ -701,6 +730,12 @@ void VolumeControl::onSoloModeChanged(int mode)
 	processMixerState();
 }
 
+void VolumeControl::onAfvChanged(bool enabled)
+{
+	obsAfv = enabled;
+	processMixerState();
+}
+
 void VolumeControl::updateCategoryLabel()
 {
 	QString labelText = QTStr("Basic.AudioMixer.Category.Active");
@@ -854,6 +889,33 @@ void VolumeControl::setSoloMode(enum obs_source_solo_mode mode)
 					   std::bind(undo_redo, std::placeholders::_1, (int)mode), uuid, uuid);
 }
 
+/* ProAudio: audio follow video of a single source.  Like solo, it is a view
+ * of the source state, so it goes through the undo stack. */
+void VolumeControl::setAfv(bool enabled)
+{
+	OBSSource source = OBSGetStrongRef(weakSource());
+	if (!source) {
+		return;
+	}
+
+	bool prev = obs_source_get_afv(source);
+	if (prev == enabled) {
+		return;
+	}
+
+	obs_source_set_afv(source, enabled);
+
+	auto undo_redo = [](const std::string &source_uuid, bool val) {
+		OBSSourceAutoRelease source = obs_get_source_by_uuid(source_uuid.c_str());
+		obs_source_set_afv(source, val);
+	};
+
+	const char *name = obs_source_get_name(source);
+	OBSBasic::Get()->undo_s.add_action(QTStr("Undo.Afv.Change").arg(name),
+					   std::bind(undo_redo, std::placeholders::_1, prev),
+					   std::bind(undo_redo, std::placeholders::_1, enabled), uuid, uuid);
+}
+
 void VolumeControl::onSourceActiveChanged(bool active)
 {
 	processMixerState();
@@ -937,9 +999,22 @@ void VolumeControl::processMixerState()
 	soloButton->setToolTip(soloTooltip);
 	utils->toggleClass(soloButton, "checked", soloed);
 
+	/* ProAudio: audio follow video.  The button is disabled for global audio
+	 * devices, which never take part in the program output and would stay
+	 * silent forever. */
+	bool global = mixerStatus().has(VolumeControl::MixerStatus::Global);
+
+	QSignalBlocker blockFollow(followButton);
+	followButton->setChecked(obsAfv);
+	followButton->setEnabled(!global);
+	followButton->setToolTip(QTStr(global ? "Basic.ProAudio.Afv.GlobalTooltip"
+					      : "Basic.ProAudio.Afv.Tooltip"));
+	utils->toggleClass(followButton, "checked", obsAfv);
+
 	style()->polish(muteButton);
 	style()->polish(monitorButton);
 	style()->polish(soloButton);
+	style()->polish(followButton);
 
 	updateCategoryLabel();
 }
@@ -972,6 +1047,11 @@ void VolumeControl::handleSoloButton(bool checked)
 	}
 
 	setSoloMode(mode);
+}
+
+void VolumeControl::handleFollowButton(bool checked)
+{
+	setAfv(checked);
 }
 
 void VolumeControl::sliderChanged(int vol)
@@ -1047,13 +1127,15 @@ void VolumeControl::updateTabOrder()
 		setTabOrder(slider, muteButton);
 		setTabOrder(muteButton, monitorButton);
 		setTabOrder(monitorButton, soloButton);
-		setTabOrder(soloButton, lastFocus);
+		setTabOrder(soloButton, followButton);
+		setTabOrder(followButton, lastFocus);
 	} else {
 		setTabOrder(prevFocus, nameButton);
 		setTabOrder(nameButton, muteButton);
 		setTabOrder(muteButton, monitorButton);
 		setTabOrder(monitorButton, soloButton);
-		setTabOrder(soloButton, slider);
+		setTabOrder(soloButton, followButton);
+		setTabOrder(followButton, slider);
 		setTabOrder(slider, lastFocus);
 	}
 }
@@ -1069,6 +1151,7 @@ void VolumeControl::setName(QString name)
 
 	muteButton->setAccessibleName(QTStr("VolControl.Mute").arg(name));
 	soloButton->setAccessibleName(QTStr("Basic.ProAudio.SoloSource").arg(name));
+	followButton->setAccessibleName(QTStr("Basic.ProAudio.AfvSource").arg(name));
 }
 
 void VolumeControl::setMeterDecayRate(qreal q)
@@ -1095,6 +1178,10 @@ void VolumeControl::setGlobalInMixer(bool global)
 {
 	if (mixerStatus().has(VolumeControl::MixerStatus::Global) != global) {
 		mixerStatus().set(VolumeControl::MixerStatus::Global, global);
+
+		/* ProAudio: the follow (AFV) button only makes sense for sources
+		 * that can reach the program output. */
+		processMixerState();
 
 		OBSBasic *main = OBSBasic::Get();
 		emit main->mixerStatusChanged(uuid);

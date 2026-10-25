@@ -108,7 +108,9 @@ Hoja de ruta
    1. ✔ Audio Follow Video (AFV) por entrada: la fuente solo suena mientras forma parte de la
       salida al aire, sin tocar su fader, su mute ni sus envíos.
    2. Pendiente: mix-minus.
-   3. Pendiente: hasta 8 salidas a dispositivos (una por bus), con el bus Master incluido.
+   3. ✔ Salidas a dispositivos: cada bus ``A``..``G`` se reproduce en un dispositivo de salida
+      propio. ``M`` (Master) no se enruta: es lo que usan la transmisión y la grabación. Por
+      ahora solo Windows (WASAPI); CoreAudio y PulseAudio quedan como "no disponible".
 4. **F4 - Plugins**: host VST3 y matriz de canales.
 
 Registro de cambios propios
@@ -173,6 +175,19 @@ Registro de cambios propios
   cada tira del mezclador, entrada en su menú contextual y columna "Follow" en las Propiedades de
   Audio avanzadas, todas con deshacer; el botón queda deshabilitado en los dispositivos de audio
   globales, que no pertenecen a ninguna escena.
+* **F3.3**: ``libobs``: **salidas de bus**. Cada bus ``A``..``G`` se puede reproducir en un
+  dispositivo de salida distinto (``obs_audio_set_bus_device()`` / ``obs_audio_get_bus_device()``,
+  ``obs_audio_bus_outputs_available()``), con un stream por bus que se recrea solo cuando cambia
+  la configuración de audio (frecuencia de muestreo o canales), así que un cambio de ajustes no
+  deja las salidas en silencio. El bus se engancha al mix como callback de audio crudo con el
+  formato exacto del dispositivo, de modo que libobs hace la conversión y el bus conserva el
+  tiempo del hilo de audio en vez de sumar un hilo y un búfer por salida. ``M`` no se puede
+  enrutar, igual que en vMix. ``libobs`` (Windows): backend WASAPI compartido, que rechaza los
+  formatos que OBS no puede generar (por ejemplo 24 bits en contenedor de 32) en vez de
+  reproducirlos mal; en Linux, macOS y FreeBSD la API existe pero informa "no disponible".
+  ``frontend``: columna de salida en la ventana de buses, con "sin salida", el dispositivo
+  predeterminado y los dispositivos conectados; el ruteo se guarda por perfil (claves
+  ``BusDeviceA``..``BusDeviceG``) y se aplica al arrancar y al cambiar de perfil.
 * **CI**: primer arranque del workflow del fork. Se publican los tags de upstream en ``origin``
   (sin ellos ``versionconfig.cmake`` rompe el configure), el job de macOS pasa a ``macos-26`` con
   Xcode 26.5, el de Windows a ``windows-2025-vs2026`` y Ubuntu compila contra 24.04 y 26.04. Los

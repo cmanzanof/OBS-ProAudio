@@ -82,25 +82,27 @@ las dos que agrega el fork.
 Hoja de ruta
 ------------
 
-1. **F1 - Motor de buses** (en curso)
+1. **F1 - Motor de buses** (casi completo)
 
-   1. ``MAX_AUDIO_MIXES`` 6 -> 8.
-   2. Ganancia y mute por fuente y por bus (sends post-fader). Las rampas por bus quedan para
+   1. ✔ ``MAX_AUDIO_MIXES`` 6 -> 8.
+   2. ✔ Ganancia y mute por fuente y por bus (sends post-fader). Las rampas por bus quedan para
       F3, donde las necesita Audio Follow Video.
-   3. Solo AFL/PFL no destructivo en la salida de monitoreo (auriculares). El bus de monitoreo
-      con fader propio llega con las salidas de bus de F3.
-   4. Medidores peak/RMS por bus.
-   5. Delay por entrada en milisegundos.
+   3. ✔ Solo AFL/PFL no destructivo en la salida de monitoreo (auriculares), con volumen de
+      auriculares propio.
+   4. ✔ Medidores peak/RMS por bus.
+   5. Pendiente: delay por entrada en milisegundos.
 
-2. **F2 - UI del mezclador** (en curso)
+2. **F2 - UI del mezclador** (completa para el MVP)
 
-   1. Buses ``M A B C D E F G`` por fuente y columna de solo en las Propiedades de Audio
+   1. ✔ Buses ``M A B C D E F G`` por fuente y columna de solo en las Propiedades de Audio
       avanzadas, con persistencia de los envíos por bus.
-   2. Botón Solo en cada tira del mezclador, con elección AFL/PFL, indicador de cuántas fuentes
+   2. ✔ Botón Solo en cada tira del mezclador, con elección AFL/PFL, indicador de cuántas fuentes
       están en solo y "quitar todos los solos".
-   3. Envíos por bus con sliders, faders por bus, volumen de auriculares y medidores por bus.
-3. **F3 - Salidas y automatismos**: hasta 8 salidas a dispositivos, bus de headphones,
-   Audio Follow Video (AFV) y mix-minus.
+   3. ✔ Envíos por bus con faders, faders por bus, volumen de auriculares y medidores por bus.
+      Pendiente: los faders de bus viven en una ventana propia; falta integrarlos como una franja
+      fija arriba del mezclador, al estilo de la sección "Outputs" de vMix.
+3. **F3 - Salidas y automatismos**: hasta 8 salidas a dispositivos, Audio Follow Video (AFV) y
+   mix-minus.
 4. **F4 - Plugins**: host VST3 y matriz de canales.
 
 Registro de cambios propios
@@ -135,11 +137,30 @@ Registro de cambios propios
   elegir AFL o PFL, AFL por defecto). La barra del mezclador muestra un indicador con la cantidad
   de fuentes en solo y permite quitarlas todas de una vez, para que un solo olvidado no pase
   desapercibido.
+* **F2.3**: ``frontend``: los envíos por bus se ajustan desde una ventana con un fader por bus
+  (de silencio a +6 dB, en dB como en vMix), que se abre desde la fila de la fuente en las
+  Propiedades de Audio avanzadas o desde el menú contextual de su tira en el mezclador. Todo el
+  diálogo es un solo paso de deshacer. De paso se arreglaron las señales ``bus_send`` y
+  ``solo_mode``: estaban emitidas sin declarar, así que ningún ``connect`` las recibía y la UI no
+  se enteraba de los cambios hechos por otra vía.
+* **F2.4**: ``libobs``: ganancia maestra por bus (``obs_audio_set_bus_volume()`` /
+  ``obs_audio_get_bus_volume()``), aplicada en el momento de sumar las fuentes al mix, después del
+  volumen de cada fuente y de los envíos, y ganancia del dispositivo de monitoreo
+  (``obs_audio_set_monitoring_volume()`` / ``obs_audio_get_monitoring_volume()``), que se aplica
+  por encima de lo que esté sonando en los auriculares. ``frontend``: la barra del mezclador abre
+  una ventana con los faders de ``M`` y ``A``..``G`` más el volumen de auriculares, con un botón
+  para volver todo a 0 dB. La ventana no es modal, así que se puede mezclar con ella abierta, y
+  todo lo que se toca en ella es un solo paso de deshacer.
+* **F1.4**: ``libobs``: ``obs_volmeter_attach_bus()``, que engancha un medidor de nivel a un bus
+  en lugar de a una fuente, usando el mismo mix que alimenta sus salidas (o sea, mide después del
+  volumen de cada fuente, de los envíos y del fader del bus). ``frontend``: la ventana de buses
+  muestra un medidor compacto por bus, con RMS, pico y retención de pico.
 * **CI**: primer arranque del workflow del fork. Se publican los tags de upstream en ``origin``
   (sin ellos ``versionconfig.cmake`` rompe el configure), el job de macOS pasa a ``macos-26`` con
   Xcode 26.5, el de Windows a ``windows-2025-vs2026`` y Ubuntu compila contra 24.04 y 26.04. Los
   jobs que fallan vuelcan el final de su log como anotaciones y los pushes de solo-docs no
-  disparan builds. Primera corrida verde: F1.1 y F1.2 compilan en las cuatro plataformas.
+  disparan builds. Corridas verdes: F1.1, F1.2, F1.3, F2.0 a F2.4, y el motor de F1.4, en las
+  cuatro plataformas.
 
 Licencia
 --------

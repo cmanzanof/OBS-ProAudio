@@ -43,6 +43,7 @@ target_sources(
     audio-monitoring/win32/wasapi-monitoring-available.c
     audio-monitoring/win32/wasapi-output.c
     audio-monitoring/win32/wasapi-output.h
+    audio-output/win32/wasapi-bus-output.c
     libobs.rc
     obs-win-crash-handler.c
     obs-windows.c

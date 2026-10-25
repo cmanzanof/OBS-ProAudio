@@ -62,12 +62,13 @@ if(ENABLE_PULSEAUDIO)
       audio-monitoring/pulse/pulseaudio-output.c
       audio-monitoring/pulse/pulseaudio-wrapper.c
       audio-monitoring/pulse/pulseaudio-wrapper.h
+      audio-output/null/null-bus-output.c
   )
 
   target_link_libraries(libobs PRIVATE PulseAudio::PulseAudio)
   target_enable_feature(libobs "PulseAudio audio monitoring (FreeBSD)")
 else()
-  target_sources(libobs PRIVATE audio-monitoring/null/null-audio-monitoring.c)
+  target_sources(libobs PRIVATE audio-monitoring/null/null-audio-monitoring.c audio-output/null/null-bus-output.c)
   target_disable_feature(libobs "PulseAudio audio monitoring (FreeBSD)")
 endif()
 

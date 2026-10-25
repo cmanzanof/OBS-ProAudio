@@ -1043,6 +1043,20 @@ struct audio_monitor *audio_monitor_create(obs_source_t *source);
 void audio_monitor_reset(struct audio_monitor *monitor);
 extern void audio_monitor_destroy(struct audio_monitor *monitor);
 
+/* ProAudio: bus -> playback device outputs.  The portable layer (see
+ * audio-output/audio-bus-output.c) remembers which device each auxiliary bus
+ * (A..G) plays on and recreates the streams whenever the audio system is
+ * reset.  Each platform provides the writer that actually fills the device. */
+struct audio_bus_output;
+
+extern bool audio_bus_outputs_available(void);
+extern struct audio_bus_output *audio_bus_output_create(size_t bus, const char *device_id);
+extern void audio_bus_output_destroy(struct audio_bus_output *output);
+
+extern void audio_bus_outputs_reload(void);
+extern void audio_bus_outputs_free(void);
+extern void audio_bus_outputs_cleanup(void);
+
 /* ProAudio: gain a monitoring device has to apply to the audio of a source,
  * taking solo (AFL/PFL) into account. */
 extern float obs_source_monitor_volume(const obs_source_t *source);

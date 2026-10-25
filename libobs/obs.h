@@ -899,6 +899,27 @@ EXPORT float obs_audio_get_bus_volume(size_t bus);
 EXPORT void obs_audio_set_monitoring_volume(float volume);
 EXPORT float obs_audio_get_monitoring_volume(void);
 
+/** Returns true when this build can play an auxiliary bus on a playback
+ * device.  Windows is the only platform with a backend for now. */
+EXPORT bool obs_audio_bus_outputs_available(void);
+
+/** Routes an auxiliary bus (1..MAX_AUDIO_MIXES-1, i.e. A..G) to a playback
+ * device, or turns its output off when device_id is NULL or empty.
+ *
+ * The master mix (bus 0) cannot be routed: it is what recording and streaming
+ * use, and like in vMix it is not a device output.  The ids are the ones
+ * returned by obs_enum_audio_monitoring_devices(); "default" selects the
+ * default playback device.
+ *
+ * @param bus        Audio mixer (bus) index, 1..MAX_AUDIO_MIXES-1
+ * @param device_id  Device to play the bus on, or NULL to disable it
+ * @return           true if the output is now active
+ */
+EXPORT bool obs_audio_set_bus_device(size_t bus, const char *device_id);
+
+/** Gets the device a bus plays on, or NULL when its output is off. */
+EXPORT const char *obs_audio_get_bus_device(size_t bus);
+
 EXPORT void obs_add_tick_callback(void (*tick)(void *param, float seconds), void *param);
 EXPORT void obs_remove_tick_callback(void (*tick)(void *param, float seconds), void *param);
 

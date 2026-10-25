@@ -951,6 +951,11 @@ static void stop_audio(void)
 static void obs_free_audio(void)
 {
 	struct obs_core_audio *audio = &obs->audio;
+
+	/* ProAudio: the bus outputs hold raw audio callbacks, so they have to be
+	 * detached while the audio output (and its mutexes) still exist. */
+	audio_bus_outputs_free();
+
 	if (audio->audio)
 		audio_output_close(audio->audio);
 
@@ -1446,6 +1451,8 @@ void obs_shutdown(void)
 
 	obs_free_data();
 	obs_free_audio();
+	/* ProAudio: forget the bus output devices as well. */
+	audio_bus_outputs_cleanup();
 	obs_free_video();
 	os_task_queue_destroy(obs->destruction_task_thread);
 	obs_free_hotkeys();
@@ -1652,7 +1659,14 @@ bool obs_reset_audio2(const struct obs_audio_info2 *oai)
 	     (int)ai.samples_per_sec, (int)ai.speakers, max_buffering_ms,
 	     oai->fixed_buffering ? "fixed" : "dynamically increasing");
 
-	return obs_init_audio(&ai);
+	if (!obs_init_audio(&ai))
+		return false;
+
+	/* ProAudio: reopen the bus outputs with the new sample rate and channel
+	 * setup.  They keep their device, so a settings change is not silent. */
+	audio_bus_outputs_reload();
+
+	return true;
 }
 
 bool obs_reset_audio(const struct obs_audio_info *oai)

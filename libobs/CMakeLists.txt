@@ -167,6 +167,7 @@ target_sources(
     media-io/video-matrices.c
     media-io/video-scaler-ffmpeg.c
     media-io/video-scaler.h
+    audio-output/audio-bus-output.c
 )
 
 target_sources(

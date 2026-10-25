@@ -609,6 +609,31 @@ Video, Audio, and Graphics
 
 ---------------------
 
+.. function:: bool obs_audio_bus_outputs_available(void)
+
+   :return: Whether this build can play an auxiliary bus on a playback device
+
+   .. versionadded:: 32.2
+
+---------------------
+
+.. function:: bool obs_audio_set_bus_device(size_t bus, const char *device_id)
+              const char *obs_audio_get_bus_device(size_t bus)
+
+   Routes an auxiliary bus (``1..MAX_AUDIO_MIXES-1``, i.e. buses ``A..G``) to a
+   playback device, or turns its output off when *device_id* is ``NULL`` or
+   empty.  The ids are the ones returned by
+   :c:func:`obs_enum_audio_monitoring_devices`, and ``"default"`` selects the
+   default playback device.  The master mix (bus ``0``) cannot be routed,
+   because it is the mix used by recording and streaming.
+
+   The routing is kept when the audio system is reset, so changing the sample
+   rate or the channel setup does not silence the outputs.
+
+   .. versionadded:: 32.2
+
+---------------------
+
 .. function:: void obs_add_main_render_callback(void (*draw)(void *param, uint32_t cx, uint32_t cy), void *param)
               void obs_remove_main_render_callback(void (*draw)(void *param, uint32_t cx, uint32_t cy), void *param)
 
